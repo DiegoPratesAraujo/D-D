@@ -1,0 +1,3934 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IELD — App Append‑Only (Wizard + Ficha)</title>
+
+  <style>
+    /* ==========================================================
+       TEMA/ESTILO BÁSICO — modo escuro simples
+       ========================================================== */
+    :root{ color-scheme:dark }
+    *{ box-sizing:border-box }
+    body{
+      margin:0; background:#0f1115; color:#e8eaf0;
+      font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    header{
+      position:sticky; top:0; z-index:10;
+      display:flex; gap:8px; align-items:center; justify-content:space-between;
+      background:#171922; border-bottom:1px solid #262b36; padding:10px 12px;
+    }
+    .brand{ font-weight:800 }
+    .nav{ display:flex; gap:8px; flex-wrap:wrap }
+    main{ padding:14px }
+    button{
+      border:1px solid #2b3242; background:#1e2330; color:#e8eaf0;
+      padding:9px 12px; border-radius:10px; cursor:pointer;
+    }
+    button.primary{ background:#1b5e54; border-color:#24796d }
+    button:disabled{ opacity:.55; cursor:not-allowed }
+    .panel{
+      background:#161a23; border:1px solid #242a38; border-radius:14px;
+      padding:12px; margin:10px 0; box-shadow:0 8px 28px rgba(0,0,0,.25)
+    }
+    .title{ font-weight:800; margin:0 0 6px 0 }
+    .muted{ color:#a9afbf; font-size:14px }
+    .list{ display:grid; gap:8px }
+    .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+    input[type="text"], textarea{
+      width:100%; padding:10px; border-radius:10px;
+      border:1px solid #2b3242; background:#1c2030; color:#fff;
+    }
+    textarea{ min-height:80px }
+    .chip{
+      display:inline-flex; gap:8px; align-items:center; padding:6px 10px;
+      border-radius:12px; background:#1f2432; border:1px solid #2b3142
+    }
+    .hidden{ display:none!important }
+    .tabbtn{ border-radius:10px }
+
+    /* Cards/itens selecionáveis */
+    .item{ border:1px solid #2b3142; background:#1c2130; border-radius:10px; padding:8px; cursor:pointer }
+    .item:hover{ background:#1a2236 }
+    .item.sel{ outline:2px solid #2aa198; box-shadow:0 0 0 2px #2aa19855 inset }
+    .cols{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px }
+    .hint{ font-size:12px; color:#9ba3b8 }
+
+    /* Retrato */
+    .portrait{
+      width:112px; height:112px; border-radius:12px; object-fit:cover;
+      border:1px solid #2b3142; background:#0c0f16; display:block
+    }
+    .placeholder{
+      width:112px; height:112px; border-radius:12px; border:1px dashed #334;
+      display:flex; align-items:center; justify-content:center; color:#9aa
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">📜 IELD</div>
+  <nav class="nav">
+    <!-- Play inicializa estado e habilita os demais botões -->
+    <button id="btnPlay" class="primary">▶️ Play</button>
+    <button id="btnPersonagens" disabled>Personagens</button>
+    <button id="btnNovo" disabled>Novo Personagem</button>
+  </nav>
+</header>
+
+<main>
+  <!-- LISTA -->
+  <section id="viewList" class="panel hidden">
+    <h2 class="title">Seus Personagens</h2>
+    <div id="charactersList" class="list"></div>
+    <p class="muted" id="emptyHint">
+      Nenhum personagem ainda. Toque em <b>Novo Personagem</b> para começar.
+    </p>
+  </section>
+
+  <!-- WIZARD (conteúdo gerado por JS) -->
+  <section id="viewCreate" class="panel hidden"></section>
+
+  <!-- FICHA -->
+  <section id="viewSheet" class="panel hidden">
+    <div class="row" style="justify-content:space-between">
+      <h2 class="title" id="charTitle">Ficha</h2>
+      <span class="chip" id="charIdChip">id: —</span>
+    </div>
+
+    <div class="row" style="margin:6px 0 10px 0">
+      <button class="tabbtn" data-tab="abaFicha">Ficha</button>
+      <button class="tabbtn" data-tab="abaInventario">Inventário</button>
+      <button class="tabbtn" data-tab="abaMagias">Magias</button>
+      <button class="tabbtn" data-tab="abaJornal">Jornal</button>
+      <button class="tabbtn" data-tab="abaAvancado">Avançado</button>
+    </div>
+
+    <div id="abaFicha" class="panel">
+      <div class="muted" id="sheetSummary">(Aba Ficha)</div>
+    </div>
+    <div id="abaInventario" class="panel hidden"><div class="muted">(Aba Inventário)</div></div>
+    <div id="abaMagias" class="panel hidden"><div class="muted">(Aba Magias)</div></div>
+
+    <div id="abaJornal" class="panel hidden">
+      <h3 class="title" style="font-size:16px">História</h3>
+      <textarea id="journalHistory" placeholder="Escreva/edite a história..."></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="btnSaveHistory" class="primary">Salvar História</button>
+        <button id="btnCopyDesc">Copiar Descrição (prompt)</button>
+        <span id="historyStatus" class="muted" style="margin-left:8px"></span>
+      </div>
+
+      <h3 class="title" style="font-size:16px; margin-top:14px">Retrato</h3>
+      <div class="row" style="gap:10px; align-items:center">
+        <img id="portraitPreviewSheet" class="portrait hidden" alt="Retrato"/>
+        <div id="portraitPlaceholderSheet" class="placeholder">Sem retrato</div>
+        <input id="filePortraitReplace" type="file" accept="image/*" />
+      </div>
+      <p class="muted" style="margin-top:6px">A imagem é salva localmente (DataURL). Recomendo ~512px.</p>
+    </div>
+
+    <div id="abaAvancado" class="panel hidden"><div class="muted">(Aba Avançado)</div></div>
+  </section>
+</main>
+
+<!-- ==============================================================
+     NÚCLEO — estado, persistência e navegação (append‑only friendly)
+     ============================================================== -->
+<script>
+/** Chaves de storage e endereços do DOM */
+var KEYS = { characters: 'ield-characters' };
+var ADDR = {
+  views: { list:'viewList', create:'viewCreate', sheet:'viewSheet' },
+  list:  { container:'charactersList', hint:'emptyHint' },
+  sheet: { title:'charTitle', idChip:'charIdChip' }
+};
+
+/** Estado em memória */
+var characters = [];     // lista de fichas (cache)
+var currentId  = null;   // id da ficha aberta
+var started    = false;  // se o app já iniciou
+
+/** Persistência simples em localStorage */
+function read(key, fb){
+  try{ var r = localStorage.getItem(key); return r?JSON.parse(r):fb; }
+  catch(e){ return fb; }
+}
+function write(key, val){
+  try{ localStorage.setItem(key, JSON.stringify(val)); }
+  catch(e){}
+}
+
+/** Utilitários gerais */
+function escapeHTML(s){
+  return String(s).replace(/[&<>"']/g, function(m){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[m];
+  });
+}
+function signed(n){ n=Number(n||0); return (n>=0?'+':'')+n; }
+
+/** Navegação entre views */
+function showView(name){
+  var all=[ADDR.views.list,ADDR.views.create,ADDR.views.sheet];
+  for(var i=0;i<all.length;i++){
+    var el=document.getElementById(all[i]);
+    if(el) el.classList.add('hidden');
+  }
+  var target=document.getElementById(ADDR.views[name]);
+  if(target) target.classList.remove('hidden');
+}
+function openList(){ renderList(); showView('list'); }
+function openCreate(){
+  showView('create');
+  // reset do wizard é ativado por função global (que poderá ser sobrescrita via patch)
+  if (typeof resetWizard==='function') resetWizard();
+}
+function openSheet(id){
+  currentId=id;
+  var ch=null;
+  for(var i=0;i<characters.length;i++){ if(characters[i].id===id){ ch=characters[i]; break; } }
+  var name=(ch&&ch.name)?ch.name:'Sem Nome';
+  document.getElementById(ADDR.sheet.title).textContent='Ficha — '+name;
+  document.getElementById(ADDR.sheet.idChip).textContent='id: '+id;
+  renderSheet(ch);
+  switchTab('abaFicha');
+  showView('sheet');
+}
+
+/** Render da lista de personagens */
+function renderList(){
+  var box=document.getElementById(ADDR.list.container);
+  var hint=document.getElementById(ADDR.list.hint);
+  if(!box||!hint) return;
+  box.innerHTML='';
+  if(!characters||!characters.length){
+    hint.classList.remove('hidden'); return;
+  }
+  hint.classList.add('hidden');
+  var arr=characters.slice().sort(function(a,b){
+    return ((b.updatedAt||b.createdAt)-(a.updatedAt||a.createdAt));
+  });
+  for(var i=0;i<arr.length;i++){
+    var ch=arr[i]; var lvl=(ch.level!=null?ch.level:1);
+    var btn=document.createElement('button');
+    btn.className='row';
+    btn.style='width:100%; justify-content:space-between';
+    btn.innerHTML =
+      '<span class="chip"><b>'+escapeHTML(ch.name||'Sem Nome')+'</b></span>'+
+      '<span class="muted">nível '+lvl+'</span>';
+    (function(id){ btn.addEventListener('click', function(){ openSheet(id); }); })(ch.id);
+    var wrap=document.createElement('div'); wrap.className='panel';
+    wrap.appendChild(btn); box.appendChild(wrap);
+  }
+}
+
+/** Abas da Ficha */
+function switchTab(tabId){
+  var ids=['abaFicha','abaInventario','abaMagias','abaJornal','abaAvancado'];
+  for(var i=0;i<ids.length;i++){
+    var el=document.getElementById(ids[i]);
+    if(el) el.classList.add('hidden');
+  }
+  var tgt=document.getElementById(tabId);
+  if(tgt) tgt.classList.remove('hidden');
+}
+
+/** Boot: Play habilita tudo e abre a lista */
+document.getElementById('btnPlay').addEventListener('click', function(){
+  if (started) return;
+  started = true;
+  characters = read(KEYS.characters, []);
+  document.getElementById('btnPersonagens').disabled = false;
+  document.getElementById('btnNovo').disabled = false;
+  this.disabled = true;
+  this.textContent = '✔️ Iniciado';
+  openList();
+});
+document.getElementById('btnPersonagens').addEventListener('click', openList);
+document.getElementById('btnNovo').addEventListener('click', openCreate);
+// tabs (delegado direto; cada botão já tem data-tab)
+(function bindTabButtons(){
+  var tabs=document.querySelectorAll('.tabbtn');
+  for(var i=0;i<tabs.length;i++){
+    tabs[i].addEventListener('click', function(){ switchTab(this.dataset.tab); });
+  }
+})();
+</script>
+
+<!-- ==============================================================
+     WIZARD — estrutura (shell); dados e lógica virão abaixo (append)
+     ============================================================== -->
+<script>
+(function WIZARD_SHELL_BOOT(){
+  if (window.__WIZ_SHELL_INSTALLED__) return;
+  window.__WIZ_SHELL_INSTALLED__ = true;
+
+  var root=document.getElementById('viewCreate');
+  var html = ''
+    + '<h2 class="title">Criar Personagem</h2>'
+    + '<div id="wizHeader" class="row" style="justify-content:space-between">'
+    +   '<div><b id="wizStepTitle">Passo 1/12 — Classe</b></div>'
+    +   '<div class="muted" id="wizProgress">0% concluído</div>'
+    + '</div>'
+    + '<div id="wizSummary" class="row" style="gap:8px;margin:8px 0">'
+    +   '<span class="chip" id="sumClasse">Classe: —</span>'
+    +   '<span class="chip" id="sumRaca">Raça: —</span>'
+    +   '<span class="chip" id="sumProf">Profs: 0</span>'
+    +   '<span class="chip" id="sumTal">Talentos: 0</span>'
+    +   '<span class="chip" id="sumMag">Magias: 0</span>'
+    +   '<span class="chip" id="sumNome">Nome: —</span>'
+    + '</div>'
+    + '<div id="wizContent" style="margin-top:10px">'
+
+    +   '<div id="stepClasse" class="panel">'
+    +     '<div class="muted" style="margin-bottom:6px">Escolha sua <b>Classe</b>. (cards entram depois)</div>'
+    +     '<div id="slotClasses" class="cols"></div>'
+    +     '<div class="hint">Características de classe aparecerão aqui quando plugarmos os dados.</div>'
+    +   '</div>'
+
+    +   '<div id="stepRaca" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">Escolha sua <b>Raça</b>.</div>'
+    +     '<div id="slotRacas" class="cols"></div>'
+    +   '</div>'
+
+    +   '<div id="stepTendencia" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">Selecione sua <b>Tendência</b>.</div>'
+    +     '<div id="slotTendencias" class="list">'
+    +       '<label class="row"><input type="radio" name="tend" value="LB"> Leal e Bom</label>'
+    +       '<label class="row"><input type="radio" name="tend" value="NB"> Neutro e Bom</label>'
+    +       '<label class="row"><input type="radio" name="tend" value="CB"> Caótico e Bom</label>'
+    +       '<label class="row"><input type="radio" name="tend" value="LN"> Leal e Neutro</label>'
+    +       '<label class="row"><input type="radio" name="tend" value="NN"> Verdadeiramente Neutro</label>'
+    +       '<label class="row"><input type="radio" name="tend" value="CN"> Caótico e Neutro</label>'
+    +       '<label class="row"><input type="radio" name="tend" value="LM"> Leal e Mau</label>'
+    +       '<label class="row"><input type="radio" name="tend" value="NM"> Neutro e Mau</label>'
+    +       '<label class="row"><input type="radio" name="tend" value="CM"> Caótico e Mau</label>'
+    +     '</div>'
+    +   '</div>'
+
+    +   '<div id="stepAntecedente" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">Escolha um <b>Antecedente</b>.</div>'
+    +     '<div id="slotAntecedentes" class="cols"></div>'
+    +   '</div>'
+
+    +   '<div id="stepNome" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">Defina o <b>Nome</b>.</div>'
+    +     '<input id="wizNome" type="text" placeholder="Ex.: Kael, Nym, Valeria..." />'
+    +   '</div>'
+
+    +   '<div id="stepAtributos" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">Distribua os <b>Atributos</b>. (point‑buy virá depois)</div>'
+    +     '<div class="row" style="gap:12px;flex-wrap:wrap">'
+    +       '<div class="chip">FOR: <span id="abFOR">8</span></div>'
+    +       '<div class="chip">DES: <span id="abDES">8</span></div>'
+    +       '<div class="chip">CON: <span id="abCON">8</span></div>'
+    +       '<div class="chip">INT: <span id="abINT">8</span></div>'
+    +       '<div class="chip">SAB: <span id="abSAB">8</span></div>'
+    +       '<div class="chip">CAR: <span id="abCAR">8</span></div>'
+    +     '</div>'
+    +   '</div>'
+
+    +   '<div id="stepProfs" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">Selecione <b>Proficiências</b>.</div>'
+    +     '<h3 class="title" style="font-size:16px">Perícias</h3><div id="slotSkills" class="cols"></div>'
+    +     '<h3 class="title" style="font-size:16px">Línguas</h3><div id="slotLangs" class="cols"></div>'
+    +     '<h3 class="title" style="font-size:16px">Ferramentas</h3><div id="slotTools" class="cols"></div>'
+    +   '</div>'
+
+    +   '<div id="stepTalentos" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">Escolha <b>Talentos</b>.</div>'
+    +     '<div id="slotFeats" class="cols"></div>'
+    +   '</div>'
+
+    +   '<div id="stepEquip" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">Equipamento inicial:</div>'
+    +     '<label class="row"><input type="radio" name="equipMode" value="packs"> Pacotes de Classe/Antecedente</label>'
+    +     '<label class="row"><input type="radio" name="equipMode" value="gold"> Ouro inicial (rolado)</label>'
+    +   '</div>'
+
+    +   '<div id="stepAparencia" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">Aparência & Personalidade</div>'
+    +     '<div class="cols">'
+    +       '<div class="item"><b>Altura</b><br><input id="apAltura" type="text" placeholder="Ex.: 1,78 m"/></div>'
+    +       '<div class="item"><b>Peso</b><br><input id="apPeso" type="text" placeholder="Ex.: 78 kg"/></div>'
+    +       '<div class="item"><b>Olhos</b><br><input id="apOlhos" type="text" placeholder="Ex.: verdes"/></div>'
+    +       '<div class="item"><b>Pele</b><br><input id="apPele" type="text" placeholder="Ex.: morena"/></div>'
+    +       '<div class="item"><b>Cabelo</b><br><input id="apCabelo" type="text" placeholder="Ex.: preto"/></div>'
+    +     '</div>'
+    +     '<div class="cols" style="margin-top:8px">'
+    +       '<div class="item" style="grid-column:1 / -1"><b>Traços</b><br><textarea id="perTraits" placeholder="1-2 traços"></textarea></div>'
+    +       '<div class="item" style="grid-column:1 / -1"><b>Ideais</b><br><textarea id="perIdeals"></textarea></div>'
+    +       '<div class="item" style="grid-column:1 / -1"><b>Vínculos</b><br><textarea id="perBonds"></textarea></div>'
+    +       '<div class="item" style="grid-column:1 / -1"><b>Defeitos</b><br><textarea id="perFlaws"></textarea></div>'
+    +     '</div>'
+    +   '</div>'
+
+    +   '<div id="stepMagias" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">Magias (placeholder).</div>'
+    +     '<div id="slotSpells" class="cols"></div>'
+    +   '</div>'
+
+    +   '<div id="stepHistoria" class="panel hidden">'
+    +     '<div class="muted" style="margin-bottom:6px">História, prompt e retrato.</div>'
+    +     '<div class="row" style="gap:12px;align-items:flex-start;flex-wrap:wrap">'
+    +       '<div style="flex:2 1 260px">'
+    +         '<label class="muted">História</label>'
+    +         '<textarea id="wizStory" placeholder="Origem, motivações, eventos marcantes..."></textarea>'
+    +         '<div class="row" style="margin-top:8px"><button id="wizGenDescBtn">Gerar descrição (prompt)</button></div>'
+    +         '<textarea id="wizDescOut" class="muted" style="margin-top:8px" placeholder="Saída do prompt gerado aqui (copiável)"></textarea>'
+    +       '</div>'
+    +       '<div style="flex:1 1 200px">'
+    +         '<label class="muted">Retrato</label>'
+    +         '<div class="row" style="gap:12px;align-items:center">'
+    +           '<img id="wizPortraitPreview" class="portrait hidden" alt="Retrato"/>'
+    +           '<div id="wizPortraitPlaceholder" class="placeholder">Sem retrato</div>'
+    +         '</div>'
+    +         '<input id="wizPortraitFile" type="file" accept="image/*" style="margin-top:8px"/>'
+    +         '<div class="muted" style="margin-top:6px">Redimensionamos ~512px e salvamos localmente (DataURL).</div>'
+    +       '</div>'
+    +     '</div>'
+    +   '</div>'
+
+    + '</div>' /* wizContent */
+    + '<div class="row" style="justify-content:space-between;margin-top:12px">'
+    +   '<button id="wizBack">← Voltar</button>'
+    +   '<div class="row"><button id="wizCancel">Cancelar</button><button id="wizNext" class="primary">Avançar →</button></div>'
+    + '</div>';
+
+  root.innerHTML = html;
+
+  // Passos padrão (poderão ser estendidos no final do arquivo)
+  window.STEPS = window.STEPS || [
+    {id:'stepClasse',label:'Classe'},
+    {id:'stepRaca',label:'Raça'},
+    {id:'stepTendencia',label:'Tendências'},
+    {id:'stepAntecedente',label:'Antecedentes'},
+    {id:'stepNome',label:'Nome'},
+    {id:'stepAtributos',label:'Atributos'},
+    {id:'stepProfs',label:'Proficiências'},
+    {id:'stepTalentos',label:'Talentos'},
+    {id:'stepEquip',label:'Equipamento'},
+    {id:'stepAparencia',label:'Aparência & Personalidade'},
+    {id:'stepMagias',label:'Magias'},
+    {id:'stepHistoria',label:'História & Retrato'}
+  ];
+
+  // Estado do wizard (padrão)
+  window.wiz = window.wiz || {
+    step:0,
+    data:{
+      class:null, race:null, alignment:null, background:null,
+      name:'', abilities:{str:8,dex:8,con:8,int:8,wis:8,cha:8},
+      profs:{ skills:[], languages:[], tools:[] },
+      feats:[],
+      equip:{ mode:null },
+      appearance:{ height:'', weight:'', eyes:'', skin:'', hair:'' },
+      personality:{ traits:'', ideals:'', bonds:'', flaws:'' },
+      spells:{ known:[] },
+      story:'', portraitData:null
+    }
+  };
+})();
+</script>
+
+<script>
+(function(){
+  if (window.__FS_MOD_INSTALLED__) return;
+  window.__FS_MOD_INSTALLED__ = true;
+
+  // injeta botões se não existirem
+  function ensureButtons(){
+    if (!document.getElementById('fsEnter')){
+      var b = document.createElement('button');
+      b.id='fsEnter'; b.textContent='⤢ Tela cheia';
+      b.className='fsFloat';
+      b.style.cssText='position:fixed;z-index:9999;border:1px solid #2b3242;background:#1e2330;color:#e8eaf0;padding:9px 12px;border-radius:10px;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.25);top:12px;right:12px';
+      document.body.appendChild(b);
+    }
+    if (!document.getElementById('fsExit')){
+      var b2 = document.createElement('button');
+      b2.id='fsExit'; b2.textContent='← Voltar';
+      b2.className='fsFloat';
+      b2.style.cssText='position:fixed;z-index:9999;border:1px solid #2b3242;background:#1e2330;color:#e8eaf0;padding:9px 12px;border-radius:10px;cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.25);top:12px;left:12px;display:none';
+      document.body.appendChild(b2);
+    }
+  }
+
+  // estilo mínimo caso o arquivo original não tenha as classes
+  (function ensureStyle(){
+    var need = !document.getElementById('fsStyleCompat');
+    if (!need) return;
+    var st = document.createElement('style');
+    st.id = 'fsStyleCompat';
+    st.textContent = `
+      body.fs header{display:none}
+      .fsFloat{user-select:none}
+    `;
+    document.head.appendChild(st);
+  })();
+
+  ensureButtons();
+
+  var fsEnter = document.getElementById('fsEnter');
+  var fsExit  = document.getElementById('fsExit');
+
+  function fsShowCurrent(){
+    if (!document.body.classList.contains('fs')) return;
+    if (fsEnter) fsEnter.style.display='none';
+    if (fsExit)  fsExit.style.display='inline-block';
+  }
+
+  function enterFS(){
+    document.body.classList.add('fs');
+    if (fsEnter) fsEnter.style.display='none';
+    if (fsExit)  fsExit.style.display='inline-block';
+  }
+  function exitFS(){
+    document.body.classList.remove('fs');
+    if (fsEnter) fsEnter.style.display='inline-block';
+    if (fsExit)  fsExit.style.display='none';
+  }
+
+  // listeners idempotentes
+  if (fsEnter && !fsEnter.__bound){
+    fsEnter.__bound = true;
+    fsEnter.addEventListener('click', enterFS);
+  }
+  if (fsExit && !fsExit.__bound){
+    fsExit.__bound = true;
+    fsExit.addEventListener('click', exitFS);
+  }
+  if (!window.__fsEscBound){
+    window.__fsEscBound = true;
+    document.addEventListener('keydown', function(e){
+      if (e.key==='Escape' && document.body.classList.contains('fs')) exitFS();
+    });
+  }
+
+  // expõe helpers de integração sem sobrescrever caso já existam
+  window.fsShowCurrent = window.fsShowCurrent || fsShowCurrent;
+  window.fsEnterApp = window.fsEnterApp || enterFS;
+  window.fsExitApp  = window.fsExitApp  || exitFS;
+
+  // re-sincroniza ao trocar de view (se app chamar fsShowCurrent)
+  // nada a fazer aqui além de expor; o módulo de navegação já chama fsShowCurrent()
+})();
+</script>
+
+<!-- ==========================================================
+     PARTE 4/4 — Painel do Mestre (append-only, idempotente)
+     - Botões no header: "Jogos (Mestre)" e "Novo Jogo (Mestre)"
+     - Views: Lista, Editor, Dashboard (com abas)
+     - Persistência: localStorage em KEYS.games
+     - Integração com personagens existentes (characters[])
+     ========================================================== -->
+<script>
+(function(){
+  if (window.__GM_CORE_INSTALLED__) return;
+  window.__GM_CORE_INSTALLED__ = true;
+
+  // ---------- Chaves/Helpers ----------
+  window.KEYS = window.KEYS || {};
+  if (!window.KEYS.games) window.KEYS.games = 'ield-games';
+
+  function read(key, fb){ try{ var s=localStorage.getItem(key); return s?JSON.parse(s):fb; }catch(e){ return fb; } }
+  function write(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+  function now(){ return Date.now(); }
+  function fmt(ts){ try{ return new Date(ts).toLocaleString(); }catch(e){ return '—'; } }
+  function esc(s){ return String(s||'').replace(/[&<>"']/g,function(m){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'})[m];}); }
+  function debounce(fn, ms){ var t; return function(){ var a=arguments,ctx=this; clearTimeout(t); t=setTimeout(function(){ fn.apply(ctx,a); }, ms||300); }; }
+
+  // ---------- Header ----------
+  (function ensureHeaderButtons(){
+    var nav = document.querySelector('header .nav');
+    if (!nav) return;
+    if (!document.getElementById('btnJogosMestre')){
+      var b = document.createElement('button');
+      b.id='btnJogosMestre'; b.textContent='Jogos (Mestre)'; b.disabled=true;
+      nav.appendChild(b);
+    }
+    if (!document.getElementById('btnNovoJogoMestre')){
+      var b2 = document.createElement('button');
+      b2.id='btnNovoJogoMestre'; b2.textContent='Novo Jogo (Mestre)'; b2.disabled=true;
+      nav.appendChild(b2);
+    }
+  })();
+
+  // Habilita após Play (sem quebrar listener existente)
+  (function bindPlayUnlock(){
+    var play = document.getElementById('btnPlay');
+    function unlock(){
+      var a=document.getElementById('btnJogosMestre'); if (a) a.disabled=false;
+      var b=document.getElementById('btnNovoJogoMestre'); if (b) b.disabled=false;
+    }
+    if (window.started) unlock(); // já iniciado
+    if (play && !play.__gmUnlock){
+      play.__gmUnlock = true;
+      play.addEventListener('click', unlock);
+    }
+  })();
+
+  // ---------- Views skeleton ----------
+  var main = document.querySelector('main') || document.body;
+
+  function ensureViews(){
+    // Lista
+    if (!document.getElementById('gmViewList')){
+      var s = document.createElement('section');
+      s.id='gmViewList'; s.className='panel hidden';
+      s.innerHTML = `
+        <div class="row" style="justify-content:space-between">
+          <h2 class="title">Jogos (Mestre)</h2>
+          <button id="gmGoNew" class="primary">Novo Jogo</button>
+        </div>
+        <div id="gmList" class="list" style="margin-top:8px"></div>
+        <p id="gmEmpty" class="muted">Nenhum jogo criado ainda.</p>
+      `;
+      main.appendChild(s);
+    }
+    // Editor
+    if (!document.getElementById('gmViewEditor')){
+      var e = document.createElement('section');
+      e.id='gmViewEditor'; e.className='panel hidden';
+      e.innerHTML = `
+        <div class="row" style="justify-content:space-between">
+          <h2 class="title">Configurar Jogo (Mestre)</h2>
+          <span class="chip" id="gmEditId">novo…</span>
+        </div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <label class="chip">Nome <input id="gmName" type="text" placeholder="ex.: Campanha da Aurora" style="margin-left:6px;width:240px"></label>
+          <label class="chip">PIN <input id="gmPin" type="text" placeholder="4 dígitos" style="margin-left:6px;width:100px"></label>
+          <button id="gmGenPin">Gerar PIN</button>
+          <label class="chip">Nível Máx. <input id="gmMax" type="number" min="1" max="20" value="20" style="margin-left:6px;width:80px"></label>
+        </div>
+        <div class="panel" style="margin-top:8px">
+          <div class="row" style="gap:12px;flex-wrap:wrap">
+            <label class="chip"><input id="rgHP1" type="checkbox" checked style="margin-right:6px"> Vida máxima no nível 1</label>
+            <label class="chip"><input id="rgFeat1" type="checkbox" style="margin-right:6px"> Talento no nível 1</label>
+          </div>
+          <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:8px">
+            <label class="chip">Ouro inicial
+              <select id="rgGold" style="margin-left:6px;background:#1c2030;border:1px solid #2b3242;color:#e8eaf0;border-radius:8px;padding:4px">
+                <option value="rolado">Rolado (padrão)</option>
+                <option value="fixo:10">Fixo — 10 PO</option>
+                <option value="fixo:15">Fixo — 15 PO</option>
+                <option value="fixo:20">Fixo — 20 PO</option>
+              </select>
+            </label>
+            <span class="chip">Encumbrance</span>
+            <label class="chip"><input type="radio" name="rgEnc" value="off"> Off</label>
+            <label class="chip"><input type="radio" name="rgEnc" value="simple" checked> Padrão</label>
+            <label class="chip"><input type="radio" name="rgEnc" value="variant"> Variante</label>
+          </div>
+        </div>
+        <div class="row" style="justify-content:space-between;margin-top:10px">
+          <button id="gmBackList">← Voltar</button>
+          <button id="gmSave" class="primary">Salvar Jogo</button>
+        </div>
+      `;
+      main.appendChild(e);
+    }
+  }
+  ensureViews();
+
+  // helpers view
+  function hideAllPanels(){
+    var secs = main.querySelectorAll('section.panel');
+    for (var i=0;i<secs.length;i++) secs[i].classList.add('hidden');
+  }
+  function show(id){
+    hideAllPanels();
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('hidden');
+    if (typeof window.fsShowCurrent === 'function') window.fsShowCurrent();
+  }
+
+  // ---------- Data ----------
+  function allGames(){ return read(KEYS.games, []); }
+  function saveGames(arr){ write(KEYS.games, arr||[]); }
+
+  // ---------- Navegação header ----------
+  (function bindHeader()){
+    var bList = document.getElementById('btnJogosMestre');
+    if (bList && !bList.__gmBound){
+      bList.__gmBound = true;
+      bList.addEventListener('click', openGMList);
+    }
+    var bNew = document.getElementById('btnNovoJogoMestre');
+    if (bNew && !bNew.__gmBound){
+      bNew.__gmBound = true;
+      bNew.addEventListener('click', function(){ openGMEditor(null); });
+    }
+  })();
+
+  // ---------- Lista ----------
+  function openGMList(){
+    ensureViews();
+    renderGMList();
+    show('gmViewList');
+  }
+
+  function renderGMList(){
+    var box = document.getElementById('gmList');
+    var hint = document.getElementById('gmEmpty');
+    box.innerHTML = '';
+    var games = allGames().slice().sort(function(a,b){ return (b.updatedAt||0)-(a.updatedAt||0); });
+    if (!games.length){ hint.classList.remove('hidden'); return; }
+    hint.classList.add('hidden');
+    games.forEach(function(g){
+      var item = document.createElement('div');
+      item.className='panel';
+      item.innerHTML = `
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <span class="chip"><b>${esc(g.name||'Jogo')}</b></span>
+          <div class="row">
+            <button data-act="open" data-id="${esc(g.id)}">Abrir</button>
+            <button data-act="edit" data-id="${esc(g.id)}">Editar</button>
+            <button data-act="del"  data-id="${esc(g.id)}">Excluir</button>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:6px">
+          PIN ${esc(g.pin||'—')} · max ${g.maxLevel||20} · criado ${fmt(g.createdAt)} · atualizado ${fmt(g.updatedAt)}
+        </div>
+      `;
+      box.appendChild(item);
+    });
+
+    box.onclick = function(ev){
+      var t=ev.target, act=t && t.getAttribute('data-act'), id=t && t.getAttribute('data-id');
+      if (!act || !id) return;
+      if (act==='open') openGMDash(id);
+      if (act==='edit') openGMEditor(id);
+      if (act==='del'){
+        if (confirm('Excluir este jogo?')){
+          var arr = allGames().filter(function(x){ return x.id!==id; });
+          saveGames(arr);
+          renderGMList();
+        }
+      }
+    };
+
+    var btn = document.getElementById('gmGoNew');
+    if (btn && !btn.__bound){ btn.__bound=true; btn.addEventListener('click', function(){ openGMEditor(null); }); }
+  }
+
+  // ---------- Editor ----------
+  function openGMEditor(id){
+    ensureViews();
+    var g = (id && allGames().find(function(x){ return x.id===id; })) || {
+      id: 'gm_'+now().toString(36),
+      name:'', pin:'', maxLevel:20,
+      createdAt: now(), updatedAt: now(),
+      charIds: [],
+      rules: { maxHPLevel1:true, featAtLevel1:false, startingGold:{mode:'rolado',value:0}, encumbrance:'simple' },
+      notes:{ world:'', session:'' }, store:[], encounters:[], log:[]
+    };
+
+    document.getElementById('gmEditId').textContent = g.id;
+    document.getElementById('gmName').value = g.name||'';
+    document.getElementById('gmPin').value  = g.pin||'';
+    document.getElementById('gmMax').value  = g.maxLevel||20;
+    document.getElementById('rgHP1').checked = !!(g.rules && g.rules.maxHPLevel1);
+    document.getElementById('rgFeat1').checked = !!(g.rules && g.rules.featAtLevel1);
+    var sel = 'rolado';
+    if (g.rules && g.rules.startingGold && g.rules.startingGold.mode==='fixo'){
+      sel = 'fixo:'+(g.rules.startingGold.value||0);
+    }
+    document.getElementById('rgGold').value = sel;
+    var enc = (g.rules && g.rules.encumbrance) || 'simple';
+    var rs = document.querySelectorAll('input[name="rgEnc"]');
+    for (var i=0;i<rs.length;i++) rs[i].checked = (rs[i].value===enc);
+
+    var genPin = document.getElementById('gmGenPin');
+    if (genPin && !genPin.__bound){
+      genPin.__bound=true;
+      genPin.addEventListener('click', function(){
+        document.getElementById('gmPin').value = String(Math.floor(Math.random()*9000+1000));
+      });
+    }
+
+    var back = document.getElementById('gmBackList');
+    if (back && !back.__bound){ back.__bound=true; back.addEventListener('click', openGMList); }
+
+    var save = document.getElementById('gmSave');
+    if (save && !save.__bound){
+      save.__bound=true;
+      save.addEventListener('click', function(){
+        g.name = (document.getElementById('gmName').value||'').trim();
+        g.pin  = (document.getElementById('gmPin').value||'').trim();
+        g.maxLevel = parseInt(document.getElementById('gmMax').value||'20',10)||20;
+        g.rules = g.rules || {};
+        g.rules.maxHPLevel1 = !!document.getElementById('rgHP1').checked;
+        g.rules.featAtLevel1= !!document.getElementById('rgFeat1').checked;
+        var s = document.getElementById('rgGold').value||'rolado';
+        g.rules.startingGold = { mode:'rolado', value:0 };
+        if (/^fixo:\d+$/i.test(s)){ g.rules.startingGold.mode='fixo'; g.rules.startingGold.value=parseInt(s.split(':')[1],10)||0; }
+        var enc='simple'; var radios=document.querySelectorAll('input[name="rgEnc"]'); for (var i=0;i<radios.length;i++){ if(radios[i].checked) enc=radios[i].value; }
+        g.rules.encumbrance = enc;
+        g.updatedAt = now();
+
+        var arr = allGames();
+        var ix = arr.findIndex(function(x){ return x.id===g.id; });
+        if (ix<0) arr.push(g); else arr[ix]=g;
+        saveGames(arr);
+        openGMList();
+      });
+    }
+
+    show('gmViewEditor');
+  }
+
+  // ---------- Dashboard ----------
+  function openGMDash(id){
+    var g = allGames().find(function(x){ return x.id===id; });
+    if (!g){ alert('Jogo não encontrado.'); return; }
+
+    var dashId = 'gmDash_'+id;
+    var dash = document.getElementById(dashId);
+    if (!dash){
+      dash = document.createElement('section');
+      dash.id = dashId; dash.className='panel hidden';
+      dash.innerHTML = `
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <h2 class="title">Painel do Mestre</h2>
+          <div class="row">
+            <span class="chip">${esc(id)}</span>
+            <button id="gmBack_${id}">← Voltar</button>
+          </div>
+        </div>
+        <div class="row" style="gap:8px;margin:8px 0">
+          <button class="tabbtn" data-tab="gmTabOverview_${id}">Visão geral</button>
+          <button class="tabbtn" data-tab="gmTabParty_${id}">Personagens</button>
+          <button class="tabbtn" data-tab="gmTabEnc_${id}">Encontros</button>
+          <button class="tabbtn" data-tab="gmTabStore_${id}">Loja</button>
+          <button class="tabbtn" data-tab="gmTabNotes_${id}">Notas</button>
+          <button class="tabbtn" data-tab="gmTabLog_${id}">Registro</button>
+          <button class="tabbtn" data-tab="gmTabIO_${id}">Exportar/Importar</button>
+        </div>
+        <div id="gmTabOverview_${id}" class="panel"></div>
+        <div id="gmTabParty_${id}" class="panel hidden"></div>
+        <div id="gmTabEnc_${id}" class="panel hidden"></div>
+        <div id="gmTabStore_${id}" class="panel hidden"></div>
+        <div id="gmTabNotes_${id}" class="panel hidden"></div>
+        <div id="gmTabLog_${id}" class="panel hidden"></div>
+        <div id="gmTabIO_${id}" class="panel hidden"></div>
+      `;
+      main.appendChild(dash);
+
+      // tabs
+      var tbs = dash.querySelectorAll('.tabbtn');
+      for (var i=0;i<tbs.length;i++){
+        tbs[i].addEventListener('click', function(){
+          var tab = this.getAttribute('data-tab');
+          var panels = dash.querySelectorAll('.panel');
+          for (var j=0;j<panels.length;j++) panels[j].classList.add('hidden');
+          document.getElementById(tab).classList.remove('hidden');
+        });
+      }
+      document.getElementById('gmBack_'+id).addEventListener('click', openGMList);
+    }
+
+    // save helper
+    function save(updated){
+      var arr = allGames();
+      var ix = arr.findIndex(function(x){ return x.id===updated.id; });
+      updated.updatedAt = now();
+      if (ix<0) arr.push(updated); else arr[ix]=updated;
+      saveGames(arr);
+    }
+
+    // Overview
+    (function drawOverview(){
+      var el = document.getElementById('gmTabOverview_'+id);
+      el.innerHTML = `
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <span class="chip"><b>Jogo:</b> ${esc(g.name||'—')}</span>
+          <span class="chip"><b>PIN:</b> ${esc(g.pin||'—')}</span>
+          <span class="chip"><b>Nível máx.:</b> ${g.maxLevel||20}</span>
+          <span class="chip"><b>Personagens:</b> ${(g.charIds||[]).length}</span>
+        </div>
+        <p class="muted" style="margin-top:8px">Criado: ${fmt(g.createdAt)} · Atualizado: ${fmt(g.updatedAt)}</p>
+      `;
+    })();
+
+    // Party
+    (function drawParty(){
+      var el = document.getElementById('gmTabParty_'+id);
+      var chars = Array.isArray(window.characters)?window.characters:read('ield-characters',[]);
+      var selected = new Set(g.charIds||[]);
+      var list = chars.slice().sort(function(a,b){ return (b.updatedAt||0)-(a.updatedAt||0); })
+        .map(function(ch){
+          var on = selected.has(ch.id);
+          return `
+            <div class="panel">
+              <div class="row" style="justify-content:space-between;align-items:center">
+                <span class="chip"><b>${esc(ch.name||'Sem Nome')}</b> · nível ${ch.level||1}</span>
+                <button data-act="${on?'detach':'attach'}" data-id="${esc(ch.id)}">${on?'Remover da mesa':'Adicionar à mesa'}</button>
+              </div>
+            </div>`;
+        }).join('');
+      el.innerHTML = list || '<p class="muted">Sem fichas locais.</p>';
+
+      el.onclick = function(ev){
+        var t=ev.target, act=t.getAttribute('data-act'), cid=t.getAttribute('data-id');
+        if (!act||!cid) return;
+        g.charIds = Array.isArray(g.charIds)?g.charIds:[];
+        if (act==='attach' && g.charIds.indexOf(cid)<0) g.charIds.push(cid);
+        if (act==='detach') g.charIds = g.charIds.filter(function(x){ return x!==cid; });
+        save(g); drawOverview(); drawParty(); // re-render
+      };
+      function drawOverview(){ // shadow local
+        var el = document.getElementById('gmTabOverview_'+id);
+        el.innerHTML = `
+          <div class="row" style="gap:8px;flex-wrap:wrap">
+            <span class="chip"><b>Jogo:</b> ${esc(g.name||'—')}</span>
+            <span class="chip"><b>PIN:</b> ${esc(g.pin||'—')}</span>
+            <span class="chip"><b>Nível máx.:</b> ${g.maxLevel||20}</span>
+            <span class="chip"><b>Personagens:</b> ${(g.charIds||[]).length}</span>
+          </div>
+          <p class="muted" style="margin-top:8px">Criado: ${fmt(g.createdAt)} · Atualizado: ${fmt(g.updatedAt)}</p>
+        `;
+      }
+    })();
+
+    // Encontros (simplificado)
+    (function drawEncounters(){
+      var el = document.getElementById('gmTabEnc_'+id);
+      g.encounters = Array.isArray(g.encounters)?g.encounters:[];
+      el.innerHTML = `
+        <div class="row" style="justify-content:space-between">
+          <h3 class="title" style="font-size:16px">Encontros</h3>
+          <button id="encAdd_${id}">Novo Encontro</button>
+        </div>
+        <div id="encList_${id}" class="list" style="margin-top:8px"></div>
+      `;
+      function renderList(){
+        var box = document.getElementById('encList_'+id);
+        box.innerHTML='';
+        if(!g.encounters.length){ box.innerHTML='<p class="muted">Nenhum encontro salvo.</p>'; return; }
+        g.encounters.forEach(function(enc, ix){
+          var div = document.createElement('div');
+          div.className='panel';
+          var mobs = (enc.mobs||[]).map(function(m){ return esc(m.name)+' x'+(m.qty||1)+' (CR '+esc(m.cr||'?')+')'; }).join(' · ');
+          div.innerHTML = `
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <span class="chip"><b>${esc(enc.name||('Encontro '+(ix+1)))}</b></span>
+              <div class="row">
+                <button data-act="run"  data-i="${ix}">Usar</button>
+                <button data-act="edit" data-i="${ix}">Editar</button>
+                <button data-act="del"  data-i="${ix}">Excluir</button>
+              </div>
+            </div>
+            <div class="muted" style="margin-top:6px">${mobs||'(vazio)'}</div>
+            <div class="muted">${esc(enc.notes||'')}</div>
+          `;
+          box.appendChild(div);
+        });
+      }
+      function openEditor(i){
+        var enc = (i!=null)? g.encounters[i] : { name:'', notes:'', mobs:[] };
+        var wrap = document.createElement('div');
+        wrap.className = 'panel';
+        wrap.innerHTML = `
+          <div class="row" style="justify-content:space-between">
+            <h3 class="title" style="font-size:16px">${i!=null?'Editar':'Novo'} Encontro</h3>
+            <button id="encClose_${id}">Fechar</button>
+          </div>
+          <div class="row" style="gap:8px;flex-wrap:wrap">
+            <label class="chip">Nome <input id="encName_${id}" type="text" style="margin-left:6px;width:220px" value="${esc(enc.name)}"></label>
+          </div>
+          <div class="panel" style="margin-top:8px">
+            <div class="row" style="justify-content:space-between">
+              <b>Inimigos</b>
+              <button id="mobAdd_${id}">Adicionar inimigo</button>
+            </div>
+            <div id="mobList_${id}" class="list" style="margin-top:8px"></div>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <textarea id="encNotes_${id}" placeholder="Notas do encontro...">${esc(enc.notes)}</textarea>
+          </div>
+          <div class="row" style="justify-content:flex-end;margin-top:8px">
+            <button id="encSave_${id}" class="primary">Salvar</button>
+          </div>
+        `;
+        el.appendChild(wrap);
+
+        function drawMobs(){
+          var box = document.getElementById('mobList_'+id);
+          box.innerHTML='';
+          (enc.mobs||[]).forEach(function(m, k){
+            var row = document.createElement('div');
+            row.className='panel';
+            row.innerHTML = `
+              <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+                <label class="chip">Nome <input data-i="${k}" data-f="name" type="text" style="margin-left:6px;width:160px" value="${esc(m.name||'')}"></label>
+                <label class="chip">CR/Nível <input data-i="${k}" data-f="cr" type="text" style="margin-left:6px;width:80px" value="${esc(m.cr||'')}"></label>
+                <label class="chip">Qtd <input data-i="${k}" data-f="qty" type="number" style="margin-left:6px;width:80px" value="${esc(m.qty||1)}"></label>
+                <button data-act="rmMob" data-i="${k}">Remover</button>
+              </div>
+            `;
+            box.appendChild(row);
+          });
+          box.oninput = debounce(function(ev){
+            var i = +ev.target.getAttribute('data-i');
+            var f = ev.target.getAttribute('data-f');
+            if (isNaN(i) || !f) return;
+            enc.mobs[i][f] = (f==='qty')? parseInt(ev.target.value||'1',10)||1 : ev.target.value;
+          }, 200);
+          box.onclick = function(ev){
+            var a=ev.target.getAttribute('data-act');
+            var i=+ev.target.getAttribute('data-i');
+            if (a==='rmMob'){ enc.mobs.splice(i,1); drawMobs(); }
+          };
+        }
+
+        document.getElementById('mobAdd_'+id).onclick = function(){
+          enc.mobs = enc.mobs || [];
+          enc.mobs.push({name:'', cr:'', qty:1});
+          drawMobs();
+        };
+        drawMobs();
+
+        document.getElementById('encSave_'+id).onclick = function(){
+          enc.name = document.getElementById('encName_'+id).value||'';
+          enc.notes= document.getElementById('encNotes_'+id).value||'';
+          if (i!=null) g.encounters[i]=enc; else g.encounters.push(enc);
+          save(g); openGMDash(id); // re-render
+        };
+        document.getElementById('encClose_'+id).onclick = function(){ openGMDash(id); };
+      }
+
+      document.getElementById('encAdd_'+id).onclick = function(){ openEditor(null); };
+      document.getElementById('encList_'+id).onclick = function(ev){
+        var a=ev.target.getAttribute('data-act');
+        var i=+ev.target.getAttribute('data-i');
+        if (a==='edit') openEditor(i);
+        if (a==='del'){ g.encounters.splice(i,1); save(g); renderList(); }
+        if (a==='run'){ alert('Encontro pronto: '+(g.encounters[i].name||('Encontro '+(i+1)))); }
+      };
+      function renderList(){ // local
+        var box = document.getElementById('encList_'+id);
+        box.innerHTML='';
+        if(!g.encounters.length){ box.innerHTML='<p class="muted">Nenhum encontro salvo.</p>'; return; }
+        g.encounters.forEach(function(enc, ix){
+          var div = document.createElement('div');
+          div.className='panel';
+          var mobs = (enc.mobs||[]).map(function(m){ return esc(m.name)+' x'+(m.qty||1)+' (CR '+esc(m.cr||'?')+')'; }).join(' · ');
+          div.innerHTML = `
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <span class="chip"><b>${esc(enc.name||('Encontro '+(ix+1)))}</b></span>
+              <div class="row">
+                <button data-act="run"  data-i="${ix}">Usar</button>
+                <button data-act="edit" data-i="${ix}">Editar</button>
+                <button data-act="del"  data-i="${ix}">Excluir</button>
+              </div>
+            </div>
+            <div class="muted" style="margin-top:6px">${mobs||'(vazio)'}</div>
+            <div class="muted">${esc(enc.notes||'')}</div>
+          `;
+          box.appendChild(div);
+        });
+      }
+      renderList();
+    })();
+
+    // Loja
+    (function drawStore(){
+      var el = document.getElementById('gmTabStore_'+id);
+      g.store = Array.isArray(g.store)?g.store:[];
+      el.innerHTML = `
+        <div class="row" style="justify-content:space-between">
+          <h3 class="title" style="font-size:16px">Loja/Inventário</h3>
+          <button id="stAdd_${id}">Adicionar item</button>
+        </div>
+        <div id="stList_${id}" class="list" style="margin-top:8px"></div>
+      `;
+      function draw(){
+        var box = document.getElementById('stList_'+id);
+        box.innerHTML='';
+        if (!g.store.length){ box.innerHTML='<p class="muted">Sem itens.</p>'; return; }
+        g.store.forEach(function(it, ix){
+          var row = document.createElement('div');
+          row.className='panel';
+          row.innerHTML = `
+            <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
+              <label class="chip">Item <input data-i="${ix}" data-f="name" type="text" style="margin-left:6px;width:200px" value="${esc(it.name||'')}"></label>
+              <label class="chip">Preço (PO) <input data-i="${ix}" data-f="price" type="number" style="margin-left:6px;width:100px" value="${esc(it.price||0)}"></label>
+              <label class="chip">Qtd <input data-i="${ix}" data-f="qty" type="number" style="margin-left:6px;width:80px" value="${esc(it.qty||0)}"></label>
+              <button data-act="rm" data-i="${ix}">Remover</button>
+            </div>
+          `;
+          box.appendChild(row);
+        });
+        box.oninput = debounce(function(ev){
+          var i=+ev.target.getAttribute('data-i'), f=ev.target.getAttribute('data-f');
+          if (isNaN(i)||!f) return;
+          g.store[i][f] = (f==='price'||f==='qty') ? parseInt(ev.target.value||'0',10)||0 : ev.target.value;
+          save(g);
+        }, 200);
+        box.onclick = function(ev){
+          if (ev.target.getAttribute('data-act')==='rm'){
+            var i=+ev.target.getAttribute('data-i'); g.store.splice(i,1); save(g); draw();
+          }
+        };
+      }
+      document.getElementById('stAdd_'+id).onclick = function(){ g.store.push({name:'',price:0,qty:0}); save(g); draw(); };
+      draw();
+    })();
+
+    // Notas
+    (function drawNotes(){
+      var el = document.getElementById('gmTabNotes_'+id);
+      g.notes = g.notes || { world:'', session:'' };
+      el.innerHTML = `
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <div class="item" style="flex:1 1 320px"><b>Mundo</b><br>
+            <textarea id="noteWorld_${id}" placeholder="Notas de mundo/cenário...">${esc(g.notes.world)}</textarea>
+          </div>
+          <div class="item" style="flex:1 1 320px"><b>Sessão</b><br>
+            <textarea id="noteSession_${id}" placeholder="Pontos rápidos da sessão...">${esc(g.notes.session)}</textarea>
+          </div>
+        </div>
+      `;
+      var deb = debounce(function(){
+        g.notes.world   = document.getElementById('noteWorld_'+id).value||'';
+        g.notes.session = document.getElementById('noteSession_'+id).value||'';
+        save(g);
+      }, 400);
+      el.oninput = deb;
+    })();
+
+    // Registro
+    (function drawLog(){
+      var el = document.getElementById('gmTabLog_'+id);
+      g.log = Array.isArray(g.log)?g.log:[];
+      el.innerHTML = `
+        <div class="row" style="gap:8px;align-items:center">
+          <input id="logInput_${id}" type="text" placeholder="Anote um evento rápido..." style="flex:1">
+          <button id="logAdd_${id}" class="primary">Adicionar</button>
+        </div>
+        <div id="logList_${id}" class="list" style="margin-top:8px"></div>
+      `;
+      function draw(){
+        var box = document.getElementById('logList_'+id);
+        box.innerHTML='';
+        if(!g.log.length){ box.innerHTML='<p class="muted">Sem eventos.</p>'; return; }
+        g.log.slice().reverse().forEach(function(L){
+          var row = document.createElement('div');
+          row.className='panel';
+          row.innerHTML = `<div class="row" style="justify-content:space-between"><span>${esc(L.text)}</span><span class="muted">${fmt(L.ts)}</span></div>`;
+          box.appendChild(row);
+        });
+      }
+      document.getElementById('logAdd_'+id).onclick = function(){
+        var inp = document.getElementById('logInput_'+id);
+        var txt = (inp.value||'').trim(); if(!txt) return;
+        g.log.push({ ts: now(), text: txt }); inp.value=''; save(g); draw();
+      };
+      draw();
+    })();
+
+    // Import/Export
+    (function drawIO(){
+      var el = document.getElementById('gmTabIO_'+id);
+      el.innerHTML = `
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <button id="ioExport_${id}">Exportar JSON</button>
+          <input id="ioFile_${id}" type="file" accept="application/json">
+          <button id="ioImport_${id}">Importar JSON</button>
+        </div>
+        <textarea id="ioArea_${id}" class="muted" placeholder="JSON exportado ou pré-visualização da importação..." style="margin-top:8px"></textarea>
+      `;
+      document.getElementById('ioExport_'+id).onclick = function(){
+        var cur = allGames().find(function(x){ return x.id===id; });
+        var txt = JSON.stringify(cur, null, 2);
+        document.getElementById('ioArea_'+id).value = txt;
+      };
+      document.getElementById('ioImport_'+id).onclick = function(){
+        var inp = document.getElementById('ioFile_'+id);
+        if (!inp.files || !inp.files[0]){ alert('Selecione um arquivo JSON.'); return; }
+        var r = new FileReader();
+        r.onload = function(){
+          try{
+            var obj = JSON.parse(r.result);
+            if (!obj || obj.id!==id){ alert('JSON inválido/ID diferente.'); return; }
+            var arr = allGames(); var ix = arr.findIndex(function(x){ return x.id===id; });
+            if (ix>=0){ arr[ix]=obj; saveGames(arr); openGMDash(id); alert('Importado com sucesso.'); }
+          }catch(e){ alert('Falha ao importar JSON.'); }
+        };
+        r.readAsText(inp.files[0]);
+      };
+    })();
+
+    show(dashId);
+    // abre aba inicial
+    var first = document.getElementById('gmTabOverview_'+id);
+    if (first){
+      var p = dash.querySelectorAll('.panel');
+      for (var k=0;k<p.length;k++) p[k].classList.add('hidden');
+      first.classList.remove('hidden');
+    }
+  }
+
+  // binds iniciais
+  // (se o usuário clicar nos botões do header)
+  // nada mais a fazer aqui
+})();
+</script>
+
+<!-- ===================== PARTE 2/4 — Painel do Mestre (append-only, sem dados D&D) ===================== -->
+<script>
+(function(){
+  // Evita instalar duas vezes se você colar mais de uma parte
+  if (window.__GM_DASH_V2__) return;
+  window.__GM_DASH_V2__ = true;
+
+  // --------- Chaves & helpers (reutiliza se já existirem) ---------
+  window.KEYS = window.KEYS || {};
+  if (!KEYS.characters) KEYS.characters = 'ield-characters';
+  if (!KEYS.games)      KEYS.games      = 'ield-games';
+
+  function read(key, fb){ try{ var s=localStorage.getItem(key); return s?JSON.parse(s):fb; }catch(e){ return fb; } }
+  function write(key,val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+  function now(){ return Date.now(); }
+  function esc(s){ return String(s||'').replace(/[&<>"']/g,function(m){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'})[m];}); }
+  function fmt(ts){ try{ return new Date(ts).toLocaleString(); }catch(e){ return '—'; } }
+
+  // --------- Mini Event Bus (para acoplar módulos futuros só por baixo) ----------
+  // Uso: IELD.bus.on('gm:changed', cb); IELD.bus.emit('gm:changed', payload)
+  window.IELD = window.IELD || {};
+  IELD.bus = IELD.bus || (function(){
+    var map = {};
+    return {
+      on: function(evt, fn){ (map[evt] = map[evt]||[]).push(fn); },
+      off: function(evt, fn){ if(!map[evt]) return; map[evt] = map[evt].filter(f=>f!==fn); },
+      emit: function(evt, data){ (map[evt]||[]).forEach(fn=>{ try{ fn(data); }catch(e){} }); }
+    };
+  })();
+
+  // --------- Habilitar botões no header (sem duplicar) ----------
+  (function ensureHeaderButtons(){
+    var nav = document.querySelector('header .nav');
+    if(!nav) return;
+
+    if(!document.getElementById('btnJogosMestre')){
+      var b = document.createElement('button');
+      b.id = 'btnJogosMestre';
+      b.textContent = 'Jogos (Mestre)';
+      b.disabled = true;
+      nav.appendChild(b);
+    }
+    if(!document.getElementById('btnNovoJogoMestre')){
+      var b2 = document.createElement('button');
+      b2.id = 'btnNovoJogoMestre';
+      b2.textContent = 'Novo Jogo (Mestre)';
+      b2.disabled = true;
+      nav.appendChild(b2);
+    }
+
+    // Habilita após Play
+    var play = document.getElementById('btnPlay');
+    function unlock(){
+      var jm=document.getElementById('btnJogosMestre');
+      var nj=document.getElementById('btnNovoJogoMestre');
+      if (jm) jm.disabled=false;
+      if (nj) nj.disabled=false;
+    }
+    if (window.started) unlock();
+    if (play && !play.__gmV2Unlock){
+      play.__gmV2Unlock = true;
+      play.addEventListener('click', unlock);
+    }
+  })();
+
+  // --------- Views (criadas só se não existirem) ----------
+  var main = document.querySelector('main') || document.body;
+
+  function ensureViews(){
+    // Lista de jogos
+    if(!document.getElementById('gmV2List')){
+      var sec = document.createElement('section');
+      sec.id = 'gmV2List';
+      sec.className = 'panel hidden';
+      sec.innerHTML = ''
+        + '<div class="row" style="justify-content:space-between">'
+        + '  <h2 class="title">Jogos (Mestre)</h2>'
+        + '  <button id="gmV2New" class="primary">Novo Jogo (Mestre)</button>'
+        + '</div>'
+        + '<div id="gmV2ListBox" class="list" style="margin-top:8px"></div>'
+        + '<p id="gmV2Empty" class="muted">Nenhum jogo criado ainda.</p>';
+      main.appendChild(sec);
+    }
+
+    // Editor de jogo (criar/editar)
+    if(!document.getElementById('gmV2Edit')){
+      var sec2 = document.createElement('section');
+      sec2.id = 'gmV2Edit';
+      sec2.className = 'panel hidden';
+      sec2.innerHTML = ''
+        + '<div class="row" style="justify-content:space-between">'
+        + '  <h2 class="title">Configurar Jogo</h2>'
+        + '  <span class="chip" id="gmV2EditId">novo…</span>'
+        + '</div>'
+        + '<div class="row" style="gap:8px;flex-wrap:wrap;margin:6px 0">'
+        + '  <label class="chip">Nome <input id="gmV2Name" type="text" style="margin-left:6px;width:240px" placeholder="ex.: Campanha da Aurora"></label>'
+        + '  <label class="chip">PIN <input id="gmV2Pin" type="text" style="margin-left:6px;width:100px" placeholder="4 dígitos"></label>'
+        + '  <button id="gmV2GenPin">Gerar PIN</button>'
+        + '  <label class="chip">Nível Máx. <input id="gmV2MaxLevel" type="number" min="1" max="20" value="20" style="margin-left:6px;width:80px"></label>'
+        + '</div>'
+        + '<div class="panel" style="margin-top:8px">'
+        + '  <div class="row" style="gap:12px;flex-wrap:wrap">'
+        + '    <label class="chip"><input id="gmV2HP1" type="checkbox" checked style="margin-right:6px"> Vida máxima no nível 1</label>'
+        + '    <label class="chip"><input id="gmV2Feat1" type="checkbox" style="margin-right:6px"> Talento no nível 1</label>'
+        + '  </div>'
+        + '  <div class="row" style="gap:12px;flex-wrap:wrap;margin-top:8px">'
+        + '    <label class="chip">Ouro inicial'
+        + '      <select id="gmV2Gold" style="margin-left:6px;background:#1c2030;border:1px solid #2b3242;color:#e8eaf0;border-radius:8px;padding:4px">'
+        + '        <option value="rolled">Rolado</option>'
+        + '        <option value="fixed:10">Fixo 10</option>'
+        + '        <option value="fixed:15">Fixo 15</option>'
+        + '        <option value="fixed:20">Fixo 20</option>'
+        + '      </select>'
+        + '    </label>'
+        + '    <span class="chip">Encumbrance</span>'
+        + '    <label class="chip"><input type="radio" name="gmV2Enc" value="off"> Off</label>'
+        + '    <label class="chip"><input type="radio" name="gmV2Enc" value="simple" checked> Padrão</label>'
+        + '    <label class="chip"><input type="radio" name="gmV2Enc" value="variant"> Variante</label>'
+        + '  </div>'
+        + '</div>'
+        + '<div class="row" style="justify-content:space-between;margin-top:10px">'
+        + '  <button id="gmV2BackList">← Voltar</button>'
+        + '  <button id="gmV2Save" class="primary">Salvar Jogo</button>'
+        + '</div>';
+      main.appendChild(sec2);
+    }
+
+    // Dashboard de jogo (criado sob demanda, por id)
+  }
+  ensureViews();
+
+  // --------- Navegação simples dentro do módulo ----------
+  function hideAllPanels(){
+    var secs = main.querySelectorAll('section.panel');
+    for (var i=0;i<secs.length;i++) secs[i].classList.add('hidden');
+  }
+  function gmShow(id){ hideAllPanels(); var el=document.getElementById(id); if (el) el.classList.remove('hidden'); }
+
+  // --------- Persistência básica ----------
+  function allGames(){ return read(KEYS.games, []); }
+  function saveGames(arr){ write(KEYS.games, arr||[]); IELD.bus.emit('gm:changed', { type:'save', total: (arr||[]).length }); }
+
+  // --------- Render da lista ----------
+  function renderList(){
+    var box  = document.getElementById('gmV2ListBox');
+    var hint = document.getElementById('gmV2Empty');
+    box.innerHTML = '';
+    var arr = allGames().slice().sort(function(a,b){ return (b.updatedAt||0)-(a.updatedAt||0); });
+    if (!arr.length){ hint.classList.remove('hidden'); return; }
+    hint.classList.add('hidden');
+
+    for (var i=0;i<arr.length;i++){
+      var g = arr[i];
+      var wrap = document.createElement('div');
+      wrap.className = 'panel';
+      wrap.innerHTML =
+        '<div class="row" style="justify-content:space-between;align-items:center">'
+      +  '<span class="chip"><b>'+esc(g.name||'Jogo')+'</b></span>'
+      +  '<div class="row">'
+      +    '<span class="muted">PIN '+esc(g.pin||'—')+' • max '+(g.maxLevel||20)+'</span>'
+      +    '<button data-act="open" data-id="'+esc(g.id)+'">Abrir</button>'
+      +    '<button data-act="edit" data-id="'+esc(g.id)+'">Editar</button>'
+      +    '<button data-act="del"  data-id="'+esc(g.id)+'">Excluir</button>'
+      +  '</div>'
+      +'</div>'
+      +'<div class="muted" style="margin-top:6px">'
+      +  'Criado: '+fmt(g.createdAt)+' · Atualizado: '+fmt(g.updatedAt)
+      +'</div>';
+      box.appendChild(wrap);
+    }
+
+    // delegação de eventos
+    box.onclick = function(ev){
+      var t = ev.target;
+      var act = t && t.getAttribute('data-act');
+      var id  = t && t.getAttribute('data-id');
+      if (!act || !id) return;
+
+      if (act==='open') openDashboard(id);
+      if (act==='edit') openEditor(id);
+      if (act==='del'){
+        if (confirm('Excluir este jogo?')){
+          var next = allGames().filter(function(x){ return x.id!==id; });
+          saveGames(next);
+          renderList();
+        }
+      }
+    };
+  }
+
+  // --------- Editor (novo/editar) ----------
+  function collectRulesFromUI(){
+    var sel = (document.getElementById('gmV2Gold')||{}).value || 'rolled';
+    var gold = { mode:'rolled', value:0 };
+    if (/^fixed:\d+$/i.test(sel)) { gold.mode='fixed'; gold.value=parseInt(sel.split(':')[1],10)||0; }
+    var enc='simple'; var radios=document.querySelectorAll('input[name="gmV2Enc"]');
+    for (var i=0;i<radios.length;i++) if (radios[i].checked) enc=radios[i].value;
+    return {
+      maxHPLevel1: !!(document.getElementById('gmV2HP1')||{}).checked,
+      featAtLevel1:!!(document.getElementById('gmV2Feat1')||{}).checked,
+      startingGold: gold,
+      encumbrance:  enc
+    };
+  }
+
+  function openEditor(id){
+    var g = (id && allGames().find(function(x){ return x.id===id; })) || {
+      id: 'gm_'+now().toString(36),
+      name:'', pin:'', maxLevel:20,
+      createdAt: now(), updatedAt: now(),
+      charIds:[], rules:{ maxHPLevel1:true, featAtLevel1:false, startingGold:{mode:'rolled',value:0}, encumbrance:'simple' },
+      store:[], encounters:[], notes:{world:'',session:''}, log:[]
+    };
+
+    document.getElementById('gmV2EditId').textContent = g.id;
+    document.getElementById('gmV2Name').value = g.name||'';
+    document.getElementById('gmV2Pin').value  = g.pin||'';
+    document.getElementById('gmV2MaxLevel').value = g.maxLevel||20;
+    (document.getElementById('gmV2HP1')||{}).checked = !!(g.rules&&g.rules.maxHPLevel1);
+    (document.getElementById('gmV2Feat1')||{}).checked= !!(g.rules&&g.rules.featAtLevel1);
+    // ouro inicial
+    var goldSel='rolled';
+    if (g.rules && g.rules.startingGold && g.rules.startingGold.mode==='fixed'){
+      goldSel='fixed:'+(g.rules.startingGold.value||0);
+    }
+    document.getElementById('gmV2Gold').value = goldSel;
+    // encumbrance
+    var enc = (g.rules && g.rules.encumbrance) || 'simple';
+    var radios=document.querySelectorAll('input[name="gmV2Enc"]');
+    for (var i=0;i<radios.length;i++) radios[i].checked = (radios[i].value===enc);
+
+    // binds
+    var gen = document.getElementById('gmV2GenPin');
+    if (gen && !gen.__gmV2){
+      gen.__gmV2 = true;
+      gen.addEventListener('click', function(){ document.getElementById('gmV2Pin').value = String(Math.floor(Math.random()*9000+1000)); });
+    }
+    var back = document.getElementById('gmV2BackList');
+    if (back && !back.__gmV2){
+      back.__gmV2 = true;
+      back.addEventListener('click', openListView);
+    }
+    var save = document.getElementById('gmV2Save');
+    if (save && !save.__gmV2){
+      save.__gmV2 = true;
+      save.addEventListener('click', function(){
+        g.name = (document.getElementById('gmV2Name').value||'').trim();
+        g.pin  = (document.getElementById('gmV2Pin').value||'').trim();
+        g.maxLevel = parseInt(document.getElementById('gmV2MaxLevel').value||'20',10)||20;
+        g.rules = collectRulesFromUI();
+        g.updatedAt = now();
+        var arr = allGames();
+        var ix = arr.findIndex(function(x){ return x.id===g.id; });
+        if (ix<0) arr.push(g); else arr[ix]=g;
+        saveGames(arr);
+        openListView();
+      });
+    }
+
+    gmShow('gmV2Edit');
+  }
+
+  // --------- Dashboard por jogo (com abas) ----------
+  function openDashboard(id){
+    var g = allGames().find(function(x){ return x.id===id; });
+    if (!g){ alert('Jogo não encontrado.'); return; }
+
+    var dashId = 'gmV2Dash_'+id;
+    var dash = document.getElementById(dashId);
+    if (!dash){
+      dash = document.createElement('section');
+      dash.id = dashId;
+      dash.className = 'panel hidden';
+      dash.innerHTML = ''
+        + '<div class="row" style="justify-content:space-between;align-items:center">'
+        + '  <h2 class="title">Painel do Mestre</h2>'
+        + '  <div class="row">'
+        + '    <span class="chip">'+esc(id)+'</span>'
+        + '    <button data-act="back">← Voltar</button>'
+        + '  </div>'
+        + '</div>'
+        + '<div class="row" style="gap:8px;margin:8px 0">'
+        + '  <button class="tabbtn" data-tab="ov">Visão geral</button>'
+        + '  <button class="tabbtn" data-tab="party">Personagens</button>'
+        + '  <button class="tabbtn" data-tab="enc">Encontros</button>'
+        + '  <button class="tabbtn" data-tab="store">Loja</button>'
+        + '  <button class="tabbtn" data-tab="notes">Notas</button>'
+        + '  <button class="tabbtn" data-tab="log">Registro</button>'
+        + '  <button class="tabbtn" data-tab="rules">Regras</button>'
+        + '  <button class="tabbtn" data-tab="io">Exportar/Importar</button>'
+        + '</div>'
+        + '<div id="'+dashId+'_ov"    class="panel"></div>'
+        + '<div id="'+dashId+'_party" class="panel hidden"></div>'
+        + '<div id="'+dashId+'_enc"   class="panel hidden"></div>'
+        + '<div id="'+dashId+'_store" class="panel hidden"></div>'
+        + '<div id="'+dashId+'_notes" class="panel hidden"></div>'
+        + '<div id="'+dashId+'_log"   class="panel hidden"></div>'
+        + '<div id="'+dashId+'_rules" class="panel hidden"></div>'
+        + '<div id="'+dashId+'_io"    class="panel hidden"></div>';
+      main.appendChild(dash);
+
+      // navegação de abas (delegada)
+      dash.addEventListener('click', function(ev){
+        var t = ev.target;
+        if (t && t.matches('button[data-tab]')){
+          var tab = t.getAttribute('data-tab');
+          [ '_ov','_party','_enc','_store','_notes','_log','_rules','_io' ].forEach(function(suf){
+            var el = document.getElementById(dashId+suf);
+            if (el) el.classList.add('hidden');
+          });
+          var show = document.getElementById(dashId+'_'+tab);
+          if (show) show.classList.remove('hidden');
+        }
+        if (t && t.getAttribute('data-act')==='back'){ openListView(); }
+      });
+    }
+
+    // Render de cada aba (somente UI e persistência genérica, sem dados oficiais)
+
+    // Visão geral
+    (function renderOverview(){
+      var el = document.getElementById(dashId+'_ov');
+      el.innerHTML = ''
+        + '<div class="row" style="gap:8px;flex-wrap:wrap">'
+        + '  <span class="chip"><b>Jogo:</b> '+esc(g.name||'—')+'</span>'
+        + '  <span class="chip"><b>PIN:</b> '+esc(g.pin||'—')+'</span>'
+        + '  <span class="chip"><b>Nível máx.:</b> '+(g.maxLevel||20)+'</span>'
+        + '  <span class="chip"><b>Personagens:</b> '+((g.charIds||[]).length)+'</span>'
+        + '</div>'
+        + '<p class="muted" style="margin-top:8px">Criado: '+fmt(g.createdAt)+' · Atualizado: '+fmt(g.updatedAt)+'</p>';
+    })();
+
+    // Personagens (vínculo com fichas locais)
+    (function renderParty(){
+      var el = document.getElementById(dashId+'_party');
+      var chars = Array.isArray(window.characters) ? window.characters : read(KEYS.characters, []);
+      var sel = new Set(g.charIds||[]);
+      if (!chars.length){
+        el.innerHTML = '<p class="muted">Sem fichas locais.</p>';
+        return;
+      }
+      var html = '';
+      for (var i=0;i<chars.length;i++){
+        var ch = chars[i];
+        var on = sel.has(ch.id);
+        html += ''
+          + '<div class="panel">'
+          + '  <div class="row" style="justify-content:space-between;align-items:center">'
+          + '    <span class="chip"><b>'+esc(ch.name||'Sem Nome')+'</b> · nível '+(ch.level||1)+'</span>'
+          + '    <button data-act="'+(on?'detach':'attach')+'" data-id="'+esc(ch.id)+'">'+(on?'Remover da mesa':'Adicionar à mesa')+'</button>'
+          + '  </div>'
+          + '</div>';
+      }
+      el.innerHTML = html;
+
+      el.onclick = function(ev){
+        var t = ev.target;
+        var act = t.getAttribute('data-act');
+        var cid = t.getAttribute('data-id');
+        if (!act || !cid) return;
+        g.charIds = Array.isArray(g.charIds) ? g.charIds : [];
+        if (act==='attach' && g.charIds.indexOf(cid)<0) g.charIds.push(cid);
+        if (act==='detach') g.charIds = g.charIds.filter(function(x){ return x!==cid; });
+        g.updatedAt = now();
+        var arr = allGames();
+        var ix  = arr.findIndex(function(x){ return x.id===g.id; });
+        if (ix<0) arr.push(g); else arr[ix]=g;
+        saveGames(arr);
+        openDashboard(id); // re-render
+      };
+    })();
+
+    // Encontros (estrutura genérica; dados você pluga depois)
+    (function renderEncounters(){
+      var el = document.getElementById(dashId+'_enc');
+      g.encounters = Array.isArray(g.encounters) ? g.encounters : [];
+      el.innerHTML = ''
+        + '<div class="row" style="justify-content:space-between">'
+        + '  <h3 class="title" style="font-size:16px">Encontros</h3>'
+        + '  <button data-act="newEnc">Novo Encontro</button>'
+        + '</div>'
+        + '<div id="'+dashId+'_encList" class="list" style="margin-top:8px"></div>';
+
+      function drawList(){
+        var box = document.getElementById(dashId+'_encList');
+        box.innerHTML = '';
+        if (!g.encounters.length){ box.innerHTML = '<p class="muted">Nenhum encontro salvo.</p>'; return; }
+        for (var i=0;i<g.encounters.length;i++){
+          var enc = g.encounters[i];
+          var mobs = (enc.mobs||[]).map(function(m){ return esc(m.name||'?')+' x'+(m.qty||1)+' (CR '+esc(m.cr||'?')+')'; }).join(' · ');
+          var row = document.createElement('div');
+          row.className='panel';
+          row.innerHTML = ''
+            + '<div class="row" style="justify-content:space-between;align-items:center">'
+            + '  <span class="chip"><b>'+esc(enc.name||('Encontro '+(i+1)))+'</b></span>'
+            + '  <div class="row">'
+            + '    <button data-act="run"  data-i="'+i+'">Usar</button>'
+            + '    <button data-act="edit" data-i="'+i+'">Editar</button>'
+            + '    <button data-act="del"  data-i="'+i+'">Excluir</button>'
+            + '  </div>'
+            + '</div>'
+            + '<div class="muted" style="margin-top:6px">'+(mobs||'(vazio)')+'</div>'
+            + '<div class="muted">'+esc(enc.notes||'')+'</div>';
+          box.appendChild(row);
+        }
+      }
+
+      function openEncEditor(index){
+        var enc = (index!=null) ? g.encounters[index] : { name:'', notes:'', mobs:[] };
+        var wrap = document.createElement('div');
+        wrap.className='panel';
+        wrap.innerHTML = ''
+          + '<div class="row" style="justify-content:space-between">'
+          + '  <h3 class="title" style="font-size:16px">'+(index!=null?'Editar':'Novo')+' Encontro</h3>'
+          + '  <button data-act="closeEnc">Fechar</button>'
+          + '</div>'
+          + '<div class="row" style="gap:8px;flex-wrap:wrap">'
+          + '  <label class="chip">Nome <input id="'+dashId+'_encName" type="text" style="margin-left:6px;width:220px" value="'+esc(enc.name)+'"></label>'
+          + '</div>'
+          + '<div class="panel" style="margin-top:8px">'
+          + '  <div class="row" style="justify-content:space-between">'
+          + '    <b>Inimigos</b>'
+          + '    <button data-act="addMob">Adicionar inimigo</button>'
+          + '  </div>'
+          + '  <div id="'+dashId+'_mobList" class="list" style="margin-top:8px"></div>'
+          + '</div>'
+          + '<div class="row" style="margin-top:8px">'
+          + '  <textarea id="'+dashId+'_encNotes" placeholder="Notas do encontro...">'+esc(enc.notes)+'</textarea>'
+          + '</div>'
+          + '<div class="row" style="justify-content:flex-end;margin-top:8px">'
+          + '  <button data-act="saveEnc" class="primary">Salvar</button>'
+          + '</div>';
+        el.appendChild(wrap);
+
+        function drawMobs(){
+          var box = document.getElementById(dashId+'_mobList');
+          box.innerHTML='';
+          for (var i=0;i<(enc.mobs||[]).length;i++){
+            var m = enc.mobs[i];
+            var row = document.createElement('div');
+            row.className='panel';
+            row.innerHTML = ''
+              + '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">'
+              + '  <label class="chip">Nome <input data-i="'+i+'" data-f="name" type="text" style="margin-left:6px;width:160px" value="'+esc(m.name||'')+'"></label>'
+              + '  <label class="chip">CR/Nível <input data-i="'+i+'" data-f="cr" type="text" style="margin-left:6px;width:80px" value="'+esc(m.cr||'')+'"></label>'
+              + '  <label class="chip">Qtd <input data-i="'+i+'" data-f="qty" type="number" style="margin-left:6px;width:80px" value="'+esc(m.qty||1)+'"></label>'
+              + '  <button data-act="rmMob" data-i="'+i+'">Remover</button>'
+              + '</div>';
+            box.appendChild(row);
+          }
+          box.oninput = function(ev){
+            var i = +ev.target.getAttribute('data-i');
+            var f = ev.target.getAttribute('data-f');
+            if (isNaN(i) || !f) return;
+            if (f==='qty') enc.mobs[i][f] = parseInt(ev.target.value||'1',10)||1;
+            else enc.mobs[i][f] = ev.target.value;
+          };
+          box.onclick = function(ev){
+            if (ev.target.getAttribute('data-act')==='rmMob'){
+              var i = +ev.target.getAttribute('data-i');
+              enc.mobs.splice(i,1);
+              drawMobs();
+            }
+          };
+        }
+
+        drawMobs();
+
+        wrap.onclick = function(ev){
+          var a = ev.target.getAttribute('data-act');
+          if (a==='addMob'){ enc.mobs = enc.mobs||[]; enc.mobs.push({name:'',cr:'',qty:1}); drawMobs(); }
+          if (a==='saveEnc'){
+            enc.name = (document.getElementById(dashId+'_encName').value||'').trim();
+            enc.notes= (document.getElementById(dashId+'_encNotes').value||'').trim();
+            if (index!=null) g.encounters[index]=enc; else g.encounters.push(enc);
+            g.updatedAt = now();
+            var arr=allGames(); var ix=arr.findIndex(function(x){ return x.id===g.id; });
+            if (ix<0) arr.push(g); else arr[ix]=g;
+            saveGames(arr);
+            openDashboard(id);
+          }
+          if (a==='closeEnc'){ openDashboard(id); }
+        };
+      }
+
+      el.onclick = function(ev){
+        var a = ev.target.getAttribute('data-act');
+        if (a==='newEnc') openEncEditor(null);
+        if (a==='edit')   openEncEditor(+ev.target.getAttribute('data-i'));
+        if (a==='del'){
+          var i=+ev.target.getAttribute('data-i');
+          g.encounters.splice(i,1);
+          g.updatedAt = now();
+          var arr=allGames(); var ix=arr.findIndex(function(x){ return x.id===g.id; });
+          if (ix<0) arr.push(g); else arr[ix]=g;
+          saveGames(arr);
+          drawList();
+        }
+        if (a==='run'){ alert('Encontro: '+(g.encounters[+ev.target.getAttribute('data-i')].name||'—')); }
+      };
+
+      drawList();
+    })();
+
+    // Loja simples
+    (function renderStore(){
+      var el = document.getElementById(dashId+'_store');
+      g.store = Array.isArray(g.store)?g.store:[];
+      el.innerHTML = ''
+        + '<div class="row" style="justify-content:space-between">'
+        + '  <h3 class="title" style="font-size:16px">Loja/Inventário</h3>'
+        + '  <button data-act="addItem">Adicionar item</button>'
+        + '</div>'
+        + '<div id="'+dashId+'_storeList" class="list" style="margin-top:8px"></div>';
+      function draw(){
+        var box=document.getElementById(dashId+'_storeList');
+        box.innerHTML='';
+        if(!g.store.length){ box.innerHTML='<p class="muted">Sem itens.</p>'; return; }
+        for (var i=0;i<g.store.length;i++){
+          var it=g.store[i];
+          var row=document.createElement('div');
+          row.className='panel';
+          row.innerHTML=''
+            + '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">'
+            + '  <label class="chip">Item <input data-i="'+i+'" data-f="name" type="text" style="margin-left:6px;width:200px" value="'+esc(it.name||'')+'"></label>'
+            + '  <label class="chip">Preço (PO) <input data-i="'+i+'" data-f="price" type="number" style="margin-left:6px;width:100px" value="'+esc(it.price||0)+'"></label>'
+            + '  <label class="chip">Qtd <input data-i="'+i+'" data-f="qty" type="number" style="margin-left:6px;width:80px" value="'+esc(it.qty||0)+'"></label>'
+            + '  <button data-act="rm" data-i="'+i+'">Remover</button>'
+            + '</div>';
+          box.appendChild(row);
+        }
+        box.oninput = function(ev){
+          var i=+ev.target.getAttribute('data-i'), f=ev.target.getAttribute('data-f');
+          if (isNaN(i)||!f) return;
+          if (f==='price' || f==='qty') g.store[i][f] = parseInt(ev.target.value||'0',10)||0;
+          else g.store[i][f] = ev.target.value;
+          persist();
+        };
+        box.onclick = function(ev){
+          if (ev.target.getAttribute('data-act')==='rm'){
+            var i=+ev.target.getAttribute('data-i');
+            g.store.splice(i,1);
+            persist(); draw();
+          }
+        };
+      }
+      function persist(){
+        g.updatedAt = now();
+        var arr=allGames(); var ix=arr.findIndex(function(x){ return x.id===g.id; });
+        if (ix<0) arr.push(g); else arr[ix]=g;
+        saveGames(arr);
+      }
+      el.onclick = function(ev){
+        if (ev.target.getAttribute('data-act')==='addItem'){
+          g.store.push({name:'',price:0,qty:0}); persist(); draw();
+        }
+      };
+      draw();
+    })();
+
+    // Notas (auto-save simples)
+    (function renderNotes(){
+      var el=document.getElementById(dashId+'_notes');
+      g.notes = g.notes || { world:'', session:'' };
+      el.innerHTML = ''
+        + '<div class="row" style="gap:8px;flex-wrap:wrap">'
+        + '  <div class="item" style="flex:1 1 320px"><b>Mundo</b><br>'
+        + '    <textarea id="'+dashId+'_noteWorld" placeholder="Notas de mundo...">'+esc(g.notes.world)+'</textarea>'
+        + '  </div>'
+        + '  <div class="item" style="flex:1 1 320px"><b>Sessão</b><br>'
+        + '    <textarea id="'+dashId+'_noteSession" placeholder="Notas da sessão...">'+esc(g.notes.session)+'</textarea>'
+        + '  </div>'
+        + '</div>';
+      var saveTimer=null;
+      el.oninput = function(){
+        clearTimeout(saveTimer);
+        saveTimer=setTimeout(function(){
+          g.notes.world   = (document.getElementById(dashId+'_noteWorld').value||'');
+          g.notes.session = (document.getElementById(dashId+'_noteSession').value||'');
+          g.updatedAt = now();
+          var arr=allGames(); var ix=arr.findIndex(function(x){ return x.id===g.id; });
+          if (ix<0) arr.push(g); else arr[ix]=g;
+          saveGames(arr);
+        }, 350);
+      };
+    })();
+
+    // Registro
+    (function renderLog(){
+      var el=document.getElementById(dashId+'_log');
+      g.log = Array.isArray(g.log)?g.log:[];
+      el.innerHTML = ''
+        + '<div class="row" style="gap:8px;align-items:center">'
+        + '  <input id="'+dashId+'_logInput" type="text" placeholder="Anote um evento rápido..." style="flex:1">'
+        + '  <button data-act="addLog" class="primary">Adicionar</button>'
+        + '</div>'
+        + '<div id="'+dashId+'_logList" class="list" style="margin-top:8px"></div>';
+      function draw(){
+        var box=document.getElementById(dashId+'_logList');
+        box.innerHTML='';
+        if(!g.log.length){ box.innerHTML='<p class="muted">Sem eventos.</p>'; return; }
+        var arr=g.log.slice().reverse();
+        for (var i=0;i<arr.length;i++){
+          var L=arr[i];
+          var row=document.createElement('div');
+          row.className='panel';
+          row.innerHTML='<div class="row" style="justify-content:space-between"><span>'+esc(L.text)+'</span><span class="muted">'+fmt(L.ts)+'</span></div>';
+          box.appendChild(row);
+        }
+      }
+      el.onclick = function(ev){
+        if (ev.target.getAttribute('data-act')==='addLog'){
+          var inp=document.getElementById(dashId+'_logInput');
+          var txt=(inp.value||'').trim(); if(!txt) return;
+          g.log.push({ ts: now(), text: txt });
+          inp.value='';
+          g.updatedAt = now();
+          var arr=allGames(); var ix=arr.findIndex(function(x){ return x.id===g.id; });
+          if (ix<0) arr.push(g); else arr[ix]=g;
+          saveGames(arr); draw();
+        }
+      };
+      draw();
+    })();
+
+    // Regras (edição rápida)
+    (function renderRules(){
+      var el=document.getElementById(dashId+'_rules');
+      var r=g.rules||{};
+      el.innerHTML = ''
+        + '<div class="row" style="gap:12px;flex-wrap:wrap">'
+        + '  <label class="chip"><input id="'+dashId+'_rHP" type="checkbox" '+(r.maxHPLevel1?'checked':'')+' style="margin-right:6px"> Vida máxima no nível 1</label>'
+        + '  <label class="chip"><input id="'+dashId+'_rFeat" type="checkbox" '+(r.featAtLevel1?'checked':'')+' style="margin-right:6px"> Talento no nível 1</label>'
+        + '  <label class="chip">Ouro inicial'
+        + '    <select id="'+dashId+'_rGold" style="margin-left:6px;background:#1c2030;border:1px solid #2b3242;color:#e8eaf0;border-radius:8px;padding:4px">'
+        + '      <option value="rolled" '+(!r.startingGold||r.startingGold.mode!=='fixed'?'selected':'')+'>Rolado</option>'
+        + '      <option value="fixed:10" '+(r.startingGold&&r.startingGold.mode==='fixed'&&r.startingGold.value==10?'selected':'')+'>Fixo 10</option>'
+        + '      <option value="fixed:15" '+(r.startingGold&&r.startingGold.mode==='fixed'&&r.startingGold.value==15?'selected':'')+'>Fixo 15</option>'
+        + '      <option value="fixed:20" '+(r.startingGold&&r.startingGold.mode==='fixed'&&r.startingGold.value==20?'selected':'')+'>Fixo 20</option>'
+        + '    </select>'
+        + '  </label>'
+        + '  <span class="chip">Encumbrance</span>'
+        + '  <label class="chip"><input type="radio" name="'+dashId+'_enc" value="off" '+(r.encumbrance==='off'?'checked':'')+'> Off</label>'
+        + '  <label class="chip"><input type="radio" name="'+dashId+'_enc" value="simple" '+(!r.encumbrance||r.encumbrance==='simple'?'checked':'')+'> Padrão</label>'
+        + '  <label class="chip"><input type="radio" name="'+dashId+'_enc" value="variant" '+(r.encumbrance==='variant'?'checked':'')+'> Variante</label>'
+        + '</div>'
+        + '<div class="row" style="justify-content:flex-end;margin-top:8px">'
+        + '  <button data-act="saveRules" class="primary">Salvar Regras</button>'
+        + '</div>';
+      el.onclick = function(ev){
+        if (ev.target.getAttribute('data-act')!=='saveRules') return;
+        g.rules = g.rules || {};
+        g.rules.maxHPLevel1  = !!document.getElementById(dashId+'_rHP').checked;
+        g.rules.featAtLevel1 = !!document.getElementById(dashId+'_rFeat').checked;
+        var sel = document.getElementById(dashId+'_rGold').value;
+        g.rules.startingGold = { mode:'rolled', value:0 };
+        if (/^fixed:\d+$/.test(sel)){ g.rules.startingGold.mode='fixed'; g.rules.startingGold.value=parseInt(sel.split(':')[1],10)||0; }
+        var enc='simple';
+        var rs=document.querySelectorAll('input[name="'+dashId+'_enc"]'); for (var i=0;i<rs.length;i++) if (rs[i].checked) enc=rs[i].value;
+        g.rules.encumbrance = enc;
+        g.updatedAt = now();
+        var arr=allGames(); var ix=arr.findIndex(function(x){ return x.id===g.id; });
+        if (ix<0) arr.push(g); else arr[ix]=g;
+        saveGames(arr);
+        alert('Regras salvas.');
+      };
+    })();
+
+    // Exportar / Importar JSON
+    (function renderIO(){
+      var el=document.getElementById(dashId+'_io');
+      el.innerHTML = ''
+        + '<div class="row" style="gap:8px;flex-wrap:wrap">'
+        + '  <button data-act="export">Exportar JSON</button>'
+        + '  <input id="'+dashId+'_file" type="file" accept="application/json">'
+        + '  <button data-act="import">Importar JSON</button>'
+        + '</div>'
+        + '<textarea id="'+dashId+'_dump" class="muted" placeholder="JSON exportado / prévia de importação..." style="margin-top:8px"></textarea>';
+      el.onclick = function(ev){
+        var a=ev.target.getAttribute('data-act');
+        if (a==='export'){
+          var cur = allGames().find(function(x){ return x.id===id; });
+          var txt = JSON.stringify(cur, null, 2);
+          document.getElementById(dashId+'_dump').value = txt;
+        }
+        if (a==='import'){
+          var inp=document.getElementById(dashId+'_file');
+          if (!inp.files || !inp.files[0]){ alert('Selecione um arquivo JSON.'); return; }
+          var r = new FileReader();
+          r.onload = function(){
+            try{
+              var obj = JSON.parse(r.result);
+              if (!obj || obj.id!==id){ alert('JSON inválido/ID diferente.'); return; }
+              var arr = allGames();
+              var ix  = arr.findIndex(function(x){ return x.id===id; });
+              if (ix>=0){ arr[ix]=obj; saveGames(arr); openDashboard(id); alert('Importado.'); }
+            }catch(e){ alert('Falha ao importar JSON.'); }
+          };
+          r.readAsText(inp.files[0]);
+        }
+      };
+    })();
+
+    gmShow(dashId);
+    // abre a aba overview por padrão
+    var first = document.getElementById(dashId+'_ov');
+    if (first){
+      [ '_ov','_party','_enc','_store','_notes','_log','_rules','_io' ].forEach(function(suf){
+        var el = document.getElementById(dashId+suf);
+        if (el) el.classList.add('hidden');
+      });
+      first.classList.remove('hidden');
+    }
+  }
+
+  // --------- Entradas do Header ---------
+  (function bindHeader(){
+    var bList = document.getElementById('btnJogosMestre');
+    var bNew  = document.getElementById('btnNovoJogoMestre');
+    if (bList && !bList.__gmV2){ bList.__gmV2 = true; bList.addEventListener('click', openListView); }
+    if (bNew  && !bNew.__gmV2){  bNew.__gmV2  = true; bNew.addEventListener('click', function(){ openEditor(null); }); }
+    var quick = document.getElementById('gmV2New');
+    if (quick && !quick.__gmV2){ quick.__gmV2 = true; quick.addEventListener('click', function(){ openEditor(null); }); }
+  })();
+
+  function openListView(){ ensureViews(); renderList(); gmShow('gmV2List'); }
+
+  // Inicialização silenciosa (somente cria views ocultas)
+  // A lista abre quando usuário clicar em “Jogos (Mestre)”
+})();
+</script>
+
+<script>
+/* =========================================================================
+   PARTE 3/4 — Núcleo “late‑bound” + Wizard modular (sem dados embutidos)
+   - NÃO reescreve nada acima; só cria/estende APIs se faltarem.
+   - Tudo configurável depois, lá embaixo, via registries/patches.
+   ========================================================================= */
+
+/* ------------------------------
+   0) Safe namespace (App/BUS)
+   ------------------------------ */
+(function(){
+  // App root (não colide se já existir)
+  window.App = window.App || {};
+  const App = window.App;
+
+  // Event Bus simples (pub/sub) — idempotente
+  if (!App.BUS){
+    const listeners = {};
+    App.BUS = {
+      on(evt, fn){ (listeners[evt]||(listeners[evt]=[])).push(fn); return ()=>this.off(evt, fn); },
+      off(evt, fn){ const arr=listeners[evt]; if(!arr) return; const i=arr.indexOf(fn); if(i>=0) arr.splice(i,1); },
+      emit(evt, payload){ const arr=listeners[evt]; if(!arr) return; arr.slice().forEach(fn=>{ try{ fn(payload); }catch(e){} }); }
+    };
+  }
+
+  // Utils DOM (idempotentes)
+  App.$ = App.$ || (sel=>document.querySelector(sel));
+  App.$$= App.$$|| (sel=>Array.from(document.querySelectorAll(sel)));
+  App.el = App.el || function(tag, attrs, html){
+    const e=document.createElement(tag);
+    if(attrs){ Object.keys(attrs).forEach(k=>{ if(k==='class') e.className=attrs[k]; else if(k==='style') e.style.cssText=attrs[k]; else e.setAttribute(k, attrs[k]); }); }
+    if(html!=null){ if(typeof html==='string') e.innerHTML=html; else e.appendChild(html); }
+    return e;
+  };
+
+  // Storage helpers (reuse se existir)
+  App.read  = App.read  || (key, fb)=>{ try{ const s=localStorage.getItem(key); return s?JSON.parse(s):fb; }catch(e){ return fb; } };
+  App.write = App.write || (key, val)=>{ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} };
+
+  // Chaves padrão (com override possível)
+  App.KEYS = Object.assign({ characters:'ield-characters', games:'ield-games' }, App.KEYS||{});
+
+  // Estado reativo simples
+  App.state = App.state || {
+    get characters(){ return App.read(App.KEYS.characters, []); },
+    set characters(v){ App.write(App.KEYS.characters, v||[]); App.BUS.emit('characters:changed', v||[]); },
+    get games(){ return App.read(App.KEYS.games, []); },
+    set games(v){ App.write(App.KEYS.games, v||[]); App.BUS.emit('games:changed', v||[]); },
+  };
+
+  // Patch system (late-bound)
+  App.patch = App.patch || function(path, value){
+    // path: "Wizard.steps[3].id" ou "UI.colors.primary"
+    const segs = String(path).split('.');
+    let cur = App;
+    for(let i=0;i<segs.length-1;i++){
+      const s = segs[i];
+      if(!(s in cur) || typeof cur[s]!=='object') cur[s]={};
+      cur = cur[s];
+    }
+    cur[segs[segs.length-1]] = value;
+    App.BUS.emit('app:patched', { path, value });
+  };
+
+  // Registry de dados (para plugar classes/raças/etc depois)
+  App.DATA = App.DATA || (function(){
+    const store = {};           // ex.: { classes: [...], races: [...] }
+    const watchers = {};
+    return {
+      define(key, val){ store[key]=val; (watchers[key]||[]).forEach(fn=>fn(val)); App.BUS.emit('data:'+key, val); },
+      get(key, fb){ return (key in store)?store[key]:fb; },
+      on(key, fn){ (watchers[key]||(watchers[key]=[])).push(fn); return ()=>{ const a=watchers[key]; if(!a) return; const i=a.indexOf(fn); if(i>=0) a.splice(i,1);} },
+      keys(){ return Object.keys(store); }
+    };
+  })();
+
+  // Helpers variados
+  App.util = App.util || {
+    esc(s){ return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]); },
+    signed(n){ n=Number(n||0); return (n>=0?'+':'')+n; },
+    byId(id){ return document.getElementById(id); },
+    now(){ return Date.now(); },
+  };
+
+})();
+
+/* ---------------------------------------
+   1) Wizard “late‑bound” (render & hooks)
+   --------------------------------------- */
+(function(){
+  const { $, $$, el, DATA, util, BUS } = App;
+
+  // Guard: só instala uma vez
+  if (App.Wizard && App.Wizard.__installed) return;
+
+  const STEPS = App.Wizard?.STEPS || [
+    { id:'stepClasse',      label:'Classe' },
+    { id:'stepRaca',        label:'Raça' },
+    { id:'stepTendencia',   label:'Tendências' },
+    { id:'stepAntecedente', label:'Antecedentes' },
+    { id:'stepNome',        label:'Nome' },
+    { id:'stepAtributos',   label:'Atributos' },
+    { id:'stepProfs',       label:'Proficiências' },
+    { id:'stepTalentos',    label:'Talentos' },
+    { id:'stepEquip',       label:'Equipamento' },
+    { id:'stepAparencia',   label:'Aparência & Personalidade' },
+    { id:'stepMagias',      label:'Magias' },
+    { id:'stepHistoria',    label:'História & Retrato' },
+  ];
+
+  // Estado do wizard em memória (não persiste até concluir)
+  const defaultData = ()=>({
+    class:null, race:null, alignment:null, background:null,
+    name:'', level:1,
+    abilities:{str:8,dex:8,con:8,int:8,wis:8,cha:8},
+    profs:{ skills:[], languages:[], tools:[] },
+    feats:[],
+    equip:{ mode:null },
+    appearance:{ height:'', weight:'', eyes:'', skin:'', hair:'' },
+    personality:{ traits:'', ideals:'', bonds:'', flaws:'' },
+    spells:{ known:[] },
+    story:'',
+    portraitData:null
+  });
+
+  // API pública
+  App.Wizard = App.Wizard || {};
+  const Wiz = App.Wizard;
+  Wiz.__installed = true;
+  Wiz.STEPS = STEPS;
+  Wiz.state = { step:0, data: defaultData() };
+
+  // UI pointers (se existirem no DOM criado antes)
+  const elCreate = util.byId('viewCreate');
+  const chipClasse = util.byId('sumClasse');
+  const chipRaca   = util.byId('sumRaca');
+  const chipProf   = util.byId('sumProf');
+  const chipTal    = util.byId('sumTal');
+  const chipMag    = util.byId('sumMag');
+  const chipNome   = util.byId('sumNome');
+
+  function updateSummary(){
+    if (chipClasse) chipClasse.textContent = 'Classe: '+(Wiz.state.data.class||'—');
+    if (chipRaca)   chipRaca.textContent   = 'Raça: '+(Wiz.state.data.race||'—');
+    if (chipProf)   chipProf.textContent   = 'Profs: '+(Wiz.state.data.profs.skills.length + Wiz.state.data.profs.languages.length + Wiz.state.data.profs.tools.length);
+    if (chipTal)    chipTal.textContent    = 'Talentos: '+(Wiz.state.data.feats.length);
+    if (chipMag)    chipMag.textContent    = 'Magias: '+(Wiz.state.data.spells.known.length);
+    if (chipNome)   chipNome.textContent   = 'Nome: '+(Wiz.state.data.name||'—');
+  }
+
+  // Render de slots que dependem de dados externos (registries):
+  function renderClasses(){
+    const host = util.byId('slotClasses'); if(!host) return;
+    const arr = DATA.get('classes', null);
+    if (!arr || !arr.length){
+      host.innerHTML = '<div class="muted">(Classes serão listadas aqui — carregue depois via App.DATA.define("classes", [...]))</div>';
+      return;
+    }
+    host.innerHTML = arr.map(c=>{
+      const sel = (Wiz.state.data.class===c.name) ? ' sel' : '';
+      return `<div class="item${sel}" data-val="${util.esc(c.name)}"><b>${util.esc(c.name)}</b></div>`;
+    }).join('');
+  }
+  function renderRaces(){
+    const host = util.byId('slotRacas'); if(!host) return;
+    const arr = DATA.get('races', null);
+    if (!arr || !arr.length){
+      host.innerHTML = '<div class="muted">(Raças serão listadas aqui — carregue depois via App.DATA.define("races", [...]))</div>';
+      return;
+    }
+    host.innerHTML = arr.map(r=>{
+      const sel = (Wiz.state.data.race===r.name) ? ' sel' : '';
+      return `<div class="item${sel}" data-val="${util.esc(r.name)}"><b>${util.esc(r.name)}</b></div>`;
+    }).join('');
+  }
+  function renderBackgrounds(){
+    const host = util.byId('slotAntecedentes'); if(!host) return;
+    const arr = DATA.get('backgrounds', null);
+    if (!arr || !arr.length){
+      host.innerHTML = '<div class="muted">(Antecedentes serão listados aqui — App.DATA.define("backgrounds", [...]))</div>';
+      return;
+    }
+    host.innerHTML = arr.map(b=>{
+      const sel = (Wiz.state.data.background===b.name) ? ' sel' : '';
+      return `<div class="item${sel}" data-val="${util.esc(b.name)}"><b>${util.esc(b.name)}</b></div>`;
+    }).join('');
+  }
+
+  // Delegação de clique para seleção de “item” (cards)
+  document.addEventListener('click', function(ev){
+    const t = ev.target;
+    if (!t || !t.classList) return;
+    if (!t.classList.contains('item')) return;
+    const val = t.getAttribute('data-val') || '';
+    const container = t.parentElement && t.parentElement.id;
+    if (container === 'slotClasses'){
+      // single-select
+      Array.from(t.parentElement.children).forEach(n=>n.classList.remove('sel'));
+      t.classList.add('sel');
+      Wiz.state.data.class = val;
+      updateSummary();
+    }
+    if (container === 'slotRacas'){
+      Array.from(t.parentElement.children).forEach(n=>n.classList.remove('sel'));
+      t.classList.add('sel');
+      Wiz.state.data.race = val;
+      updateSummary();
+    }
+    if (container === 'slotAntecedentes'){
+      Array.from(t.parentElement.children).forEach(n=>n.classList.remove('sel'));
+      t.classList.add('sel');
+      Wiz.state.data.background = val;
+      updateSummary();
+    }
+  });
+
+  // Bind de inputs simples (nome + tendência + aparência etc.)
+  document.addEventListener('input', function(ev){
+    const id = ev.target && ev.target.id;
+    if (!id) return;
+    if (id==='wizNome'){ Wiz.state.data.name = (ev.target.value||'').trim(); updateSummary(); }
+    if (id==='apAltura') Wiz.state.data.appearance.height = (ev.target.value||'').trim();
+    if (id==='apPeso')   Wiz.state.data.appearance.weight = (ev.target.value||'').trim();
+    if (id==='apOlhos')  Wiz.state.data.appearance.eyes   = (ev.target.value||'').trim();
+    if (id==='apPele')   Wiz.state.data.appearance.skin   = (ev.target.value||'').trim();
+    if (id==='apCabelo') Wiz.state.data.appearance.hair   = (ev.target.value||'').trim();
+    if (id==='perTraits')Wiz.state.data.personality.traits= (ev.target.value||'').trim();
+    if (id==='perIdeals')Wiz.state.data.personality.ideals= (ev.target.value||'').trim();
+    if (id==='perBonds') Wiz.state.data.personality.bonds = (ev.target.value||'').trim();
+    if (id==='perFlaws') Wiz.state.data.personality.flaws = (ev.target.value||'').trim();
+    if (id==='wizStory') Wiz.state.data.story             = (ev.target.value||'').trim();
+  });
+
+  // Tendência (radios)
+  document.addEventListener('change', function(ev){
+    const n = ev.target && ev.target.name;
+    if (n==='tend'){ Wiz.state.data.alignment = ev.target.value; updateSummary(); }
+    if (n==='equipMode'){ Wiz.state.data.equip.mode = ev.target.value; }
+  });
+
+  // Gerar descrição local (usa mesma função que a Ficha usa)
+  const btnGen = util.byId('wizGenDescBtn');
+  if (btnGen && !btnGen.__bound){
+    btnGen.__bound = true;
+    btnGen.addEventListener('click', function(){
+      const partial = Object.assign({}, Wiz.state.data, { journal:{ history: Wiz.state.data.story } });
+      const build = (window.__buildDescription || function(){ return '(descrição indisponível)'; });
+      const out = util.byId('wizDescOut'); if (out) out.value = build(partial);
+    });
+  }
+
+  // Upload e resize do retrato
+  const file = util.byId('wizPortraitFile');
+  if (file && !file.__bound){
+    file.__bound = true;
+    file.addEventListener('change', function(){
+      if (!file.files || !file.files[0]) return;
+      processPortraitFile(file.files[0], function(dataUrl){
+        Wiz.state.data.portraitData = dataUrl;
+        const pv = util.byId('wizPortraitPreview');
+        const ph = util.byId('wizPortraitPlaceholder');
+        if (pv && ph){ pv.src=dataUrl; pv.classList.remove('hidden'); ph.classList.add('hidden'); }
+      });
+    });
+  }
+
+  // Botões Avançar/Voltar/Cancelar
+  const btnNext = util.byId('wizNext');
+  const btnBack = util.byId('wizBack');
+  const btnCancel = util.byId('wizCancel');
+
+  function updateStepUI(){
+    App.Wizard.STEPS.forEach(s=>{
+      const el = util.byId(s.id);
+      if (el) el.classList.add('hidden');
+    });
+    const cur = App.Wizard.STEPS[Wiz.state.step];
+    const sec = util.byId(cur.id); if (sec) sec.classList.remove('hidden');
+
+    const title = util.byId('wizStepTitle');
+    const prog  = util.byId('wizProgress');
+    if (title) title.textContent = 'Passo '+(Wiz.state.step+1)+'/'+App.Wizard.STEPS.length+' — '+cur.label;
+    const progress = Math.round((Wiz.state.step)/(App.Wizard.STEPS.length-1)*100);
+    if (prog)  prog.textContent = progress+'% concluído';
+
+    if (btnBack) btnBack.disabled = (Wiz.state.step===0);
+    if (btnNext) btnNext.textContent = (Wiz.state.step===App.Wizard.STEPS.length-1)?'Concluir ✔':'Avançar →';
+  }
+
+  if (btnNext && !btnNext.__bound){
+    btnNext.__bound = true;
+    btnNext.addEventListener('click', function(){
+      if (Wiz.state.step < App.Wizard.STEPS.length-1){
+        Wiz.state.step++; updateStepUI(); updateSummary();
+      } else {
+        // concluir
+        const now = util.now();
+        const id  = 'ch_'+now.toString(36);
+        const ch  = {
+          id, name:(Wiz.state.data.name||'Sem Nome'), level:(Wiz.state.data.level||1),
+          createdAt:now, updatedAt:now,
+          race:Wiz.state.data.race, 'class':Wiz.state.data.class, background:Wiz.state.data.background, alignment:Wiz.state.data.alignment,
+          abilities: Object.assign({}, Wiz.state.data.abilities),
+          profs:{ skills:[...Wiz.state.data.profs.skills], languages:[...Wiz.state.data.profs.languages], tools:[...Wiz.state.data.profs.tools] },
+          feats:[...Wiz.state.data.feats],
+          equip:{ mode:Wiz.state.data.equip.mode },
+          appearance: Object.assign({}, Wiz.state.data.appearance),
+          personality: Object.assign({}, Wiz.state.data.personality),
+          inventory: [], spells:{ known:[...Wiz.state.data.spells.known], prepared:[], slots:{} },
+          journal:{ history:(Wiz.state.data.story||''), quests:[], contacts:[], locations:[] },
+          portrait: Wiz.state.data.portraitData ? { dataUrl:Wiz.state.data.portraitData } : null,
+          settings:{ encumbrance:true, units:'lb' }
+        };
+        // descrição (usa mesma função global)
+        if (typeof window.__buildDescription==='function') ch.description = window.__buildDescription(ch);
+        // persiste
+        const arr = App.state.characters; arr.push(ch); App.state.characters = arr;
+        // abre ficha (se existir API openSheet do app base)
+        if (typeof window.openSheet==='function') window.openSheet(id);
+        // reseta
+        Wiz.state.step = 0; Wiz.state.data = defaultData(); updateStepUI(); updateSummary();
+      }
+    });
+  }
+  if (btnBack && !btnBack.__bound){
+    btnBack.__bound = true;
+    btnBack.addEventListener('click', function(){
+      if (Wiz.state.step>0){ Wiz.state.step--; updateStepUI(); }
+    });
+  }
+  if (btnCancel && !btnCancel.__bound){
+    btnCancel.__bound = true;
+    btnCancel.addEventListener('click', function(){
+      // volta para lista se existir
+      if (typeof window.openList==='function') window.openList();
+      // reset parcial
+      Wiz.state.step = 0; Wiz.state.data = defaultData(); updateStepUI(); updateSummary();
+    });
+  }
+
+  // Re-render dos slots quando os registries chegarem
+  DATA.on('classes', renderClasses);
+  DATA.on('races', renderRaces);
+  DATA.on('backgrounds', renderBackgrounds);
+
+  // Primeira pintura (se a viewCreate já existir)
+  if (elCreate){
+    renderClasses();
+    renderRaces();
+    renderBackgrounds();
+    updateSummary();
+    // força título/percentual corretos
+    updateStepUI();
+  }
+
+  // Exponibiliza hooks públicos para controlar do “fim do arquivo”
+  Wiz.api = {
+    reset(){ Wiz.state.step=0; Wiz.state.data=defaultData(); updateStepUI(); updateSummary(); },
+    setStep(n){ Wiz.state.step=Math.max(0, Math.min(n, App.Wizard.STEPS.length-1)); updateStepUI(); },
+    setName(v){ Wiz.state.data.name=String(v||''); updateSummary(); },
+    setClass(v){ Wiz.state.data.class=String(v||''); renderClasses(); updateSummary(); },
+    setRace(v){ Wiz.state.data.race=String(v||''); renderRaces(); updateSummary(); },
+    setBackground(v){ Wiz.state.data.background=String(v||''); renderBackgrounds(); updateSummary(); },
+    getData(){ return JSON.parse(JSON.stringify(Wiz.state.data)); },
+    setData(patch){ Object.assign(Wiz.state.data, patch||{}); updateSummary(); }
+  };
+})();
+
+/* -------------------------------------------------
+   2) Ficha/Sheet helpers (copy prompt etc.) — safe
+   ------------------------------------------------- */
+(function(){
+  if (App.Sheet && App.Sheet.__installed) return;
+  App.Sheet = { __installed:true };
+
+  // Botões dentro da ficha podem não existir ainda; use delegação:
+  document.addEventListener('click', function(ev){
+    const t = ev.target;
+    if (!t) return;
+    if (t.id==='btnCopyDescFromSheet'){
+      const cur = (typeof window.getCurrent==='function') ? window.getCurrent() : null;
+      if (!cur) return;
+      const txt = (typeof window.__buildDescription==='function') ? window.__buildDescription(cur) : (cur.description||'');
+      if (!txt) return;
+      if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt);
+    }
+    if (t.id==='btnGoJournal'){ if (typeof window.switchTab==='function') window.switchTab('abaJornal'); }
+  });
+
+  // Auto‑salvar história (debounce leve)
+  let _histTimer=null;
+  document.addEventListener('input', function(ev){
+    if (ev.target && ev.target.id==='journalHistory'){
+      const ta = ev.target;
+      const status = document.getElementById('historyStatus');
+      if (status) status.textContent='Salvando…';
+      clearTimeout(_histTimer);
+      _histTimer = setTimeout(function(){
+        const getCurrent = (typeof window.getCurrent==='function') ? window.getCurrent : ()=>null;
+        const cur = getCurrent(); if (!cur) return;
+        cur.journal = cur.journal || {};
+        cur.journal.history = ta.value||'';
+        cur.updatedAt = Date.now();
+        const arr = App.state.characters.map(c=> c.id===cur.id ? cur : c);
+        App.state.characters = arr;
+        if (status){ status.textContent='Salvo.'; setTimeout(()=>{ status.textContent=''; }, 800); }
+      }, 400);
+    }
+  });
+
+  // Troca de retrato pela ficha
+  document.addEventListener('change', function(ev){
+    if (ev.target && ev.target.id==='filePortraitReplace'){
+      const input = ev.target;
+      if (!input.files || !input.files[0]) return;
+      processPortraitFile(input.files[0], function(dataUrl){
+        const getCurrent = (typeof window.getCurrent==='function') ? window.getCurrent : ()=>null;
+        const cur = getCurrent(); if (!cur) return;
+        cur.portrait = { dataUrl };
+        cur.updatedAt = Date.now();
+        const arr = App.state.characters.map(c=> c.id===cur.id ? cur : c);
+        App.state.characters = arr;
+        // re-render rápido (se renderSheet existir)
+        if (typeof window.renderSheet==='function') window.renderSheet(cur);
+        if (typeof window.switchTab==='function') window.switchTab('abaJornal');
+      });
+    }
+  });
+})();
+
+/* -----------------------------------------------------------------------
+   3) Ganchos para “late config” (coloque dados depois, lá no rodapé)
+      Ex.: App.DATA.define('classes', [{name:'Guerreiro'}, ...])
+           App.Wizard.api.setClass('Guerreiro')
+   ----------------------------------------------------------------------- */
+(function(){
+  // Cria apenas se não existirem, para facilitar seus testes locais
+  if (!App.DATA.get('classes'))     App.DATA.define('classes',     []); // vazio por padrão
+  if (!App.DATA.get('races'))       App.DATA.define('races',       []);
+  if (!App.DATA.get('backgrounds')) App.DATA.define('backgrounds', []);
+})();
+
+/* ----------------------------------------------------------
+   4) Pequenos utilitários públicos para script de rodapé
+   ---------------------------------------------------------- */
+window.IELD = window.IELD || {
+  setClasses(list){ App.DATA.define('classes', Array.isArray(list)?list:[]); },
+  setRaces(list){ App.DATA.define('races', Array.isArray(list)?list:[]); },
+  setBackgrounds(list){ App.DATA.define('backgrounds', Array.isArray(list)?list:[]); },
+  setWizardStep(n){ App.Wizard?.api?.setStep?.(n); },
+  setWizardName(v){ App.Wizard?.api?.setName?.(v); },
+  patch(path, value){ App.patch(path, value); }
+};
+</script>
+<!-- ====================== /PARTE 3/4 ====================== -->
+<!-- ========================= CONTINUAÇÃO — BLOCO 3/4 (≈300 linhas) =========================
+     Objetivo: infraestrutura de mutações e extensibilidade por scripts “no final do arquivo”.
+     - NÃO adiciona dados de classes/raças/antecedentes.
+     - Tudo é idempotente: re-colar não duplica handlers.
+     - Expõe API global window.IELD para você alterar qualquer coisa por script depois.
+     - Mantém compatibilidade com o que já existe (characters, games, views etc.).
+============================================================================================== -->
+<script>
+(function(){
+  if (window.IELD && window.IELD.__v >= 1) return; // idempotente
+
+  // ------------------------------ Núcleo IELD ------------------------------
+  const IELD = window.IELD || {};
+  IELD.__v = 1;
+
+  // Canal de eventos simples
+  const bus = {};
+  IELD.on  = function(event, fn){
+    (bus[event] ||= new Set()).add(fn);
+    return () => (bus[event] && bus[event].delete(fn));
+  };
+  IELD.off = function(event, fn){
+    if (bus[event]) bus[event].delete(fn);
+  };
+  IELD.emit = function(event, payload){
+    if (!bus[event]) return;
+    for (const fn of [...bus[event]]) {
+      try{ fn(payload); }catch(e){ console.error('[IELD.emit]', event, e); }
+    }
+  };
+
+  // ------------------------------ Utilidades ------------------------------
+  IELD.now = () => Date.now();
+  IELD.uid = (p='id_') => p + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  IELD.esc = s => String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  IELD.clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+
+  IELD.read = function(key, fb){
+    try{ const s = localStorage.getItem(key); return s ? JSON.parse(s) : fb; }
+    catch(e){ return fb; }
+  };
+  IELD.write = function(key, val){
+    try{ localStorage.setItem(key, JSON.stringify(val)); }
+    catch(e){}
+  };
+
+  // Caminhos (state.path) — get/set profundos sem libs
+  function pathGet(obj, path){
+    if (!path) return obj;
+    const parts = String(path).split('.').filter(Boolean);
+    let cur = obj;
+    for (const k of parts){
+      if (cur == null) return undefined;
+      cur = cur[k];
+    }
+    return cur;
+  }
+  function pathSet(obj, path, value){
+    const parts = String(path).split('.').filter(Boolean);
+    if (!parts.length) return value;
+    let cur = obj;
+    for (let i=0;i<parts.length-1;i++){
+      const k = parts[i];
+      if (cur[k] == null || typeof cur[k] !== 'object') cur[k] = {};
+      cur = cur[k];
+    }
+    cur[parts[parts.length-1]] = value;
+    return obj;
+  }
+  IELD.pathGet = pathGet;
+  IELD.pathSet = pathSet;
+
+  // ------------------------------ Estado global fino ------------------------------
+  // Mantém ponteiros leves ao estado já usado no app (characters/games/currentId/etc.)
+  const state = {
+    meta: { version: 1 },
+    ui: {
+      currentView: null,
+      fullscreen: false,
+      tabs: {}, // ex.: { viewSheet:'abaJornal' }
+    },
+    // Mirrors (não copia arrays inteiros, usa referências do app quando possível)
+    refs: {
+      characters: () => window.characters || IELD.read('ield-characters', []),
+      games:      () => IELD.read('ield-games', [])
+    },
+    // Espaço livre para plugins/extensões
+    ext: {}
+  };
+  IELD.state = state;
+
+  // ------------------------------ Mutations & watchers ------------------------------
+  const watchers = new Map(); // path -> Set<fns>
+
+  // Observa um caminho (ex.: 'ui.currentView' ou 'ext.meuPlugin.flag')
+  IELD.watch = function(path, fn){
+    const key = String(path);
+    const set = watchers.get(key) || new Set();
+    set.add(fn);
+    watchers.set(key, set);
+    // dispara imediato com valor atual
+    try{ fn(pathGet(state, key)); }catch(e){ console.error('[IELD.watch:init]', key, e); }
+    return () => { const s = watchers.get(key); if (s){ s.delete(fn); if (!s.size) watchers.delete(key); } };
+  };
+
+  // Seta valor em state.* e dispara watchers + evento global
+  IELD.mutate = function(path, value){
+    pathSet(state, path, value);
+    const set = watchers.get(String(path));
+    if (set) for (const fn of [...set]) { try{ fn(value); }catch(e){ console.error('[IELD.watch:cb]', path, e); } }
+    IELD.emit('state:mutated', { path, value });
+  };
+
+  // Transação simples: executa uma série de sets, emite um único evento no fim
+  IELD.batch = function(fn){
+    const touched = [];
+    const m = (p, v)=>{ pathSet(state, p, v); touched.push({p,v}); };
+    try{ fn(m); } finally {
+      for (const {p,v} of touched){
+        const set = watchers.get(String(p));
+        if (set) for (const fn of [...set]) { try{ fn(v); }catch(e){ console.error('[IELD.watch:cb]', p, e); } }
+      }
+      IELD.emit('state:batch', { changed: touched });
+    }
+  };
+
+  // ------------------------------ DOM helpers ------------------------------
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+  const $  = (sel, root=document) => root.querySelector(sel);
+
+  // Registrar nós DOM nomeados para acesso tardio por scripts
+  const domIndex = new Map(); // key -> Node
+  IELD.dom = {
+    set: (key, el)=>{ if (el) domIndex.set(String(key), el); },
+    get: (key)=> domIndex.get(String(key)) || null,
+    has: (key)=> domIndex.has(String(key)),
+    del: (key)=> domIndex.delete(String(key)),
+    all: ()=> Object.fromEntries(domIndex)
+  };
+
+  // Atualizar texto/HTML/atributos estilizado “a posteriori”
+  IELD.patchDOM = function(target, spec){
+    // target pode ser: seletor, Node, ou chave do domIndex
+    let el = null;
+    if (typeof target === 'string'){
+      el = domIndex.get(target) || document.querySelector(target);
+    } else if (target && target.nodeType === 1){
+      el = target;
+    }
+    if (!el) return false;
+
+    const { text, html, attrs, style, classList } = (spec || {});
+    if (text != null) el.textContent = String(text);
+    if (html != null) el.innerHTML = String(html);
+    if (attrs && typeof attrs === 'object'){
+      for (const [k,v] of Object.entries(attrs)){
+        if (v == null) el.removeAttribute(k);
+        else el.setAttribute(k, String(v));
+      }
+    }
+    if (style && typeof style === 'object'){
+      for (const [k,v] of Object.entries(style)){
+        el.style[k] = v == null ? '' : String(v);
+      }
+    }
+    if (classList && typeof classList === 'object'){
+      // { add:[], remove:[], toggle:[] }
+      if (Array.isArray(classList.add))    el.classList.add(...classList.add);
+      if (Array.isArray(classList.remove)) el.classList.remove(...classList.remove);
+      if (Array.isArray(classList.toggle)) classList.toggle.forEach(c=>el.classList.toggle(c));
+    }
+
+    return true;
+  };
+
+  // Patch de CSS global (injeta <style data-ield>)
+  (function ensureStyleBucket(){
+    if (document.querySelector('style[data-ield]')) return;
+    const st = document.createElement('style');
+    st.setAttribute('data-ield', '1');
+    st.textContent = ''; // vazio por padrão
+    document.head.appendChild(st);
+  })();
+  IELD.patchStyle = function(cssText, mode='append'){
+    const st = document.querySelector('style[data-ield]');
+    if (!st) return;
+    if (mode === 'replace') st.textContent = cssText || '';
+    else st.textContent += '\n' + (cssText || '');
+  };
+
+  // ------------------------------ Registro de “handles” ------------------------------
+  // Ideia: salvar referências por chave para mexer em pontos específicos da UI
+  const handles = {};
+  IELD.handle = function(key, value){
+    // setter (armazenar qualquer coisa) / getter (sem value)
+    if (arguments.length === 1) return handles[key];
+    handles[key] = value;
+    return value;
+  };
+  IELD.handles = ()=> ({...handles});
+
+  // ------------------------------ Camada de integração com o app existente ------------------------------
+  // 1) Vistas
+  IELD.goto = function(viewId){
+    // tenta usar navegação nativa do app
+    const map = { list:'viewList', create:'viewCreate', sheet:'viewSheet' };
+    // Mestre (já criado nas partes anteriores)
+    const gmMap = { gmList:'viewGmList', gmEditor:'viewGmEditor' };
+    const id = map[viewId] || gmMap[viewId] || viewId;
+
+    // Seleciona e exibe
+    const target = document.getElementById(id);
+    if (!target){ console.warn('[IELD.goto] view não encontrada:', id); return; }
+
+    // esconde todas sections.panel, mostra a desejada
+    const secs = $$('main section.panel');
+    secs.forEach(s=>s.classList.add('hidden'));
+    target.classList.remove('hidden');
+
+    IELD.mutate('ui.currentView', id);
+  };
+
+  // 2) Fullscreen (reflete nos botões existentes)
+  IELD.fullscreen = function(enable){
+    const want = !!enable;
+    const body = document.body;
+    const enter = document.getElementById('fsEnter');
+    const exit  = document.getElementById('fsExit');
+    if (want){
+      body.classList.add('fs');
+      if (enter) enter.style.display = 'none';
+      if (exit)  exit.style.display  = 'inline-block';
+      IELD.mutate('ui.fullscreen', true);
+    }else{
+      body.classList.remove('fs');
+      if (enter) enter.style.display = 'inline-block';
+      if (exit)  exit.style.display  = 'none';
+      IELD.mutate('ui.fullscreen', false);
+    }
+  };
+
+  // 3) Tabs: sheet, gmDash, etc.
+  IELD.switchTab = function(scopeId, tabId){
+    // Convenção: filhos da view com class="panel" e IDs específicos.
+    const view = document.getElementById(scopeId);
+    if (!view){ console.warn('[IELD.switchTab] view não encontrada:', scopeId); return; }
+    const panels = $$('#'+scopeId+' > .panel', view.parentElement || document);
+    panels.forEach(p=>p.classList.add('hidden'));
+    const tab = document.getElementById(tabId);
+    if (tab) tab.classList.remove('hidden');
+    IELD.mutate('ui.tabs.'+scopeId, tabId);
+  };
+
+  // ------------------------------ Camada de seleção e render ------------------------------
+  // Selectors de conveniência (não fazem cópias pesadas)
+  IELD.select = {
+    characters: () => (window.characters || IELD.read('ield-characters', [])),
+    characterById: (id) => {
+      const arr = IELD.select.characters();
+      return arr.find(c=>c.id===id) || null;
+    },
+    games: () => IELD.read('ield-games', []),
+    gameById: (id) => {
+      const arr = IELD.select.games();
+      return arr.find(g=>g.id===id) || null;
+    }
+  };
+
+  // Render triggers: deixa plugar re-renderizações de pedaços de UI
+  // ex.: IELD.render.register('sheetSummary', fn); IELD.render.run('sheetSummary', payload)
+  const renderers = {};
+  IELD.render = {
+    register(key, fn){
+      (renderers[key] ||= new Set()).add(fn);
+      return () => renderers[key].delete(fn);
+    },
+    run(key, payload){
+      if (!renderers[key]) return;
+      for (const fn of [...renderers[key]]) {
+        try{ fn(payload); }catch(e){ console.error('[IELD.render]', key, e); }
+      }
+    },
+    list(){ return Object.fromEntries(Object.entries(renderers).map(([k,s])=>[k, s.size])); }
+  };
+
+  // ------------------------------ Persistência simples (snapshots) ------------------------------
+  IELD.export = {
+    characters(){
+      return JSON.stringify(IELD.select.characters(), null, 2);
+    },
+    games(){
+      return JSON.stringify(IELD.select.games(), null, 2);
+    },
+    all(){
+      return JSON.stringify({
+        characters: IELD.select.characters(),
+        games: IELD.select.games()
+      }, null, 2);
+    }
+  };
+  IELD.import = {
+    characters(json){
+      try{
+        const arr = JSON.parse(json);
+        if (!Array.isArray(arr)) throw new Error('JSON não é array');
+        IELD.write('ield-characters', arr);
+        if (Array.isArray(window.characters)) window.characters = arr;
+        IELD.emit('import:characters', { count: arr.length });
+        return true;
+      }catch(e){ console.error('[IELD.import.characters]', e); return false; }
+    },
+    games(json){
+      try{
+        const arr = JSON.parse(json);
+        if (!Array.isArray(arr)) throw new Error('JSON não é array');
+        IELD.write('ield-games', arr);
+        IELD.emit('import:games', { count: arr.length });
+        return true;
+      }catch(e){ console.error('[IELD.import.games]', e); return false; }
+    },
+    all(json){
+      try{
+        const obj = JSON.parse(json);
+        if (obj.characters) IELD.import.characters(JSON.stringify(obj.characters));
+        if (obj.games)      IELD.import.games(JSON.stringify(obj.games));
+        IELD.emit('import:all', { ok:true });
+        return true;
+      }catch(e){ console.error('[IELD.import.all]', e); return false; }
+    }
+  };
+
+  // ------------------------------ Patches declarativos (no fim do arquivo) ------------------------------
+  // Permite registrar alterações para rodar assim que o DOM alvo existir
+  const patchQueue = [];
+  IELD.deferPatch = function(test, action){
+    // test: () => boolean (retorna true quando estiver “pronto”)
+    // action: () => void (executa uma vez)
+    patchQueue.push({ test, action, done:false });
+  };
+
+  function tickPatches(){
+    for (const p of patchQueue){
+      if (p.done) continue;
+      let ok = false;
+      try { ok = !!p.test(); } catch(e){ ok = false; }
+      if (ok){
+        try{ p.action(); p.done = true; }
+        catch(e){ console.error('[IELD.deferPatch:action]', e); }
+      }
+    }
+  }
+  const patchTimer = setInterval(tickPatches, 120);
+  IELD.__stopPatches = () => clearInterval(patchTimer);
+
+  // ------------------------------ Exemplo: indexar alguns nós comuns ------------------------------
+  // (Facilita patchDOM por chave em vez de seletor longo)
+  IELD.deferPatch(
+    () => document.getElementById('charactersList'),
+    () => {
+      IELD.dom.set('characters.list', document.getElementById('charactersList'));
+      IELD.dom.set('characters.emptyHint', document.getElementById('emptyHint'));
+      IELD.dom.set('sheet.container', document.getElementById('viewSheet'));
+      IELD.dom.set('sheet.summary', document.getElementById('sheetSummary'));
+      IELD.dom.set('sheet.tab.btns', document.querySelectorAll('#viewSheet .tabbtn'));
+      IELD.dom.set('gm.list.container', document.getElementById('gmList'));
+      IELD.dom.set('gm.empty', document.getElementById('gmEmpty'));
+    }
+  );
+
+  // ------------------------------ Comandos (paleta simples) ------------------------------
+  // Para debug ou automação via console e também via atalhos depois
+  const commands = {};
+  IELD.cmd = function(name, fn){
+    if (arguments.length === 1) return commands[name];
+    commands[name] = fn;
+    return fn;
+  };
+  IELD.run = function(name, ...args){
+    const fn = commands[name];
+    if (!fn) { console.warn('[IELD.run] comando não encontrado:', name); return; }
+    try{ return fn(...args); }catch(e){ console.error('[IELD.run]', name, e); }
+  };
+  IELD.listCmds = () => Object.keys(commands).sort();
+
+  // Comandos úteis default (não invasivos)
+  IELD.cmd('goto', IELD.goto);
+  IELD.cmd('fs', IELD.fullscreen);
+  IELD.cmd('tab', IELD.switchTab);
+  IELD.cmd('exp:all', ()=>IELD.export.all());
+  IELD.cmd('exp:chars', ()=>IELD.export.characters());
+  IELD.cmd('exp:games', ()=>IELD.export.games());
+  IELD.cmd('stopPatches', IELD.__stopPatches);
+
+  // ------------------------------ Hooks com o app existente ------------------------------
+  // Se o app emitir eventos, sincronizamos alguns estados mínimos
+  // 1) fullscreen botões
+  (function bindFullscreenReflections(){
+    const enter = document.getElementById('fsEnter');
+    const exit  = document.getElementById('fsExit');
+    if (enter && !enter.__ieldBound){
+      enter.__ieldBound = true;
+      enter.addEventListener('click', ()=> IELD.mutate('ui.fullscreen', true));
+    }
+    if (exit && !exit.__ieldBound){
+      exit.__ieldBound = true;
+      exit.addEventListener('click', ()=> IELD.mutate('ui.fullscreen', false));
+    }
+  })();
+
+  // 2) tabs da ficha: escuta cliques para lembrar última aba aberta
+  IELD.deferPatch(
+    () => !!document.querySelector('#viewSheet .tabbtn'),
+    () => {
+      $$('#viewSheet .tabbtn').forEach(btn=>{
+        if (btn.__ieldBound) return;
+        btn.__ieldBound = true;
+        btn.addEventListener('click', ()=>{
+          const tab = btn.getAttribute('data-tab');
+          IELD.mutate('ui.tabs.viewSheet', tab);
+        });
+      });
+    }
+  );
+
+  // 3) re-render da ficha se personagens mudarem
+  IELD.on('import:characters', ()=> {
+    try{
+      if (typeof window.renderList === 'function') window.renderList();
+      const cur = (typeof window.getCurrent === 'function') ? window.getCurrent() : null;
+      if (cur && typeof window.renderSheet === 'function') window.renderSheet(cur);
+    }catch(e){ console.error(e); }
+  });
+
+  // ------------------------------ Área para plugins/patches futuros ------------------------------
+  // Exemplo: botão rápido para exportar personagens da aba Jornal (só registra se existir a view)
+  IELD.deferPatch(
+    () => document.getElementById('abaJornal'),
+    () => {
+      // Evita duplicar
+      if (document.getElementById('btnExportChars')) return;
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.marginTop = '8px';
+      row.innerHTML = '<button id="btnExportChars">Exportar Personagens (JSON)</button>';
+      document.getElementById('abaJornal').appendChild(row);
+      const btn = document.getElementById('btnExportChars');
+      btn.addEventListener('click', ()=>{
+        const txt = IELD.export.characters();
+        // pequena área de preview
+        let ta = document.getElementById('ieldExportPreview');
+        if (!ta){
+          ta = document.createElement('textarea');
+          ta.id = 'ieldExportPreview';
+          ta.className = 'muted';
+          ta.style.marginTop = '8px';
+          ta.style.minHeight = '120px';
+          document.getElementById('abaJornal').appendChild(ta);
+        }
+        ta.value = txt;
+      });
+    }
+  );
+
+  // ------------------------------ Exposição global ------------------------------
+  window.IELD = IELD;
+
+  // Sinaliza pronto
+  IELD.emit('ield:ready', { v: IELD.__v });
+
+})();
+</script>
+
+
+<script>
+(function(){
+  // Evita duplicar se colar de novo
+  if (window.__IELD_P4__) return; window.__IELD_P4__=true;
+
+  /* ============================
+     1) Event Bus: IELD.bus
+     - append-only: qualquer script futuro dispara/com ouve
+     - nomes: 'config:set', 'sheet:rerender', 'gm:open', etc.
+  ============================ */
+  const bus = (function(){
+    const ns = 'IELD:';
+    function on(type, fn, opts){ document.addEventListener(ns+type, fn, opts||{passive:true}); }
+    function off(type, fn){ document.removeEventListener(ns+type, fn); }
+    function emit(type, detail){ document.dispatchEvent(new CustomEvent(ns+type,{detail})); }
+    return { on, off, emit, ns };
+  })();
+  window.IELD = window.IELD || {};
+  window.IELD.bus = bus;
+
+  /* ============================
+     2) State Store (reductions)
+     - store.get(), store.patch(), store.reduce(type,payload)
+     - tudo salvo em localStorage (chave ield-store)
+     - NÃO guarda fichas nem jogos (já existem em KEYS.*)
+  ============================ */
+  const STORE_KEY = 'ield-store';
+  const defaults = {
+    ui: { theme:'dark', density:'comfortable', fs:false },
+    gm: { lastGameId:null },
+    wizard: { presets:{} },
+    registries: { classes:[], races:[], backgrounds:[], skills:[], langs:[], tools:[], feats:[], spells:[] }
+  };
+  function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+  function readLS(k, fb){ try{ const s=localStorage.getItem(k); return s?JSON.parse(s):fb; }catch(e){ return fb; } }
+  function writeLS(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+
+  let _state = Object.assign({}, defaults, readLS(STORE_KEY, {}));
+  const reducers = {};
+  function registerReducer(type, fn){
+    reducers[type] = fn;
+  }
+  function reduce(type, payload){
+    const cur = deepClone(_state);
+    const fn  = reducers[type];
+    if (typeof fn!=='function') return;
+    const next = fn(cur, payload) || cur;
+    _state = next;
+    writeLS(STORE_KEY, _state);
+    bus.emit('store:changed', { type, payload, state: deepClone(_state) });
+  }
+  function patch(path, value){
+    const parts = String(path).split('.');
+    let node = _state;
+    for (let i=0;i<parts.length-1;i++){
+      const p = parts[i]; if (typeof node[p]!=='object'||node[p]==null) node[p] = {};
+      node = node[p];
+    }
+    node[parts[parts.length-1]] = value;
+    writeLS(STORE_KEY, _state);
+    bus.emit('store:changed', { type:'patch', path, value, state: deepClone(_state) });
+  }
+  function get(path){
+    if (!path) return deepClone(_state);
+    const parts = String(path).split('.');
+    let node = _state;
+    for (let p of parts){
+      if (node==null) return undefined;
+      node = node[p];
+    }
+    return deepClone(node);
+  }
+  window.IELD.store = { get, patch, reduce, registerReducer };
+
+  // Alguns reducers úteis (ex.: alterar tema, densidade, toggle FS, lembrar jogo aberto)
+  registerReducer('ui:setTheme', (s,{theme})=>{ s.ui.theme = theme||'dark'; return s; });
+  registerReducer('ui:setDensity', (s,{density})=>{ s.ui.density = density||'comfortable'; return s; });
+  registerReducer('ui:toggleFS', (s)=>{ s.ui.fs = !s.ui.fs; return s; });
+  registerReducer('gm:setLastGame', (s,{id})=>{ s.gm.lastGameId = id||null; return s; });
+
+  /* ============================
+     3) Registries públicos (append-only)
+     - Use IELD.registry.set('classes',[...]) mais tarde
+     - UI do wizard e GM pode ouvir e re-renderizar
+  ============================ */
+  const registry = (function(){
+    function ensure(){
+      const reg = window.IELD.store.get('registries') || {};
+      return Object.assign({classes:[],races:[],backgrounds:[],skills:[],langs:[],tools:[],feats:[],spells:[]}, reg);
+    }
+    function set(name, arr){
+      const reg = ensure();
+      reg[name] = Array.isArray(arr)?arr:[];
+      window.IELD.store.patch('registries', reg);
+      bus.emit('registry:changed', { name, data: reg[name] });
+    }
+    function append(name, items){
+      const reg = ensure();
+      const cur = Array.isArray(reg[name])?reg[name]:[];
+      const add = Array.isArray(items)?items:[items];
+      reg[name] = cur.concat(add);
+      window.IELD.store.patch('registries', reg);
+      bus.emit('registry:changed', { name, data: reg[name] });
+    }
+    function get(name){ const reg = ensure(); return reg[name] || []; }
+    return { set, append, get };
+  })();
+  window.IELD.registry = registry;
+
+  /* ============================
+     4) Hooks: conectar registries ao Wizard
+     - Sem dados reais; apenas re-render do placeholder
+     - O wizard já expõe resetWizard/updateWizardUI; vamos criar
+       pequenas pontes para atualizar slots quando mudar registry.
+  ============================ */
+  function safeEl(id){ return document.getElementById(id); }
+  function paintList(containerId, list, getLabel){
+    const cont = safeEl(containerId); if(!cont) return;
+    if (!list.length){
+      cont.innerHTML = '<div class="muted">(sem itens — alimente o registry)</div>';
+      return;
+    }
+    cont.innerHTML = list.map((v,i)=>(
+      `<div class="item" data-val="${i}">${(getLabel?getLabel(v):String(v))}</div>`
+    )).join('');
+  }
+
+  // Atualiza cards de classes/raças/antecedentes/magias quando houver registry:changed
+  bus.on('registry:changed', function(ev){
+    const { name } = ev.detail||{};
+    if (name==='classes'){ paintList('slotClasses', registry.get('classes'), it=>escapeHTML(it.name||it)); }
+    if (name==='races'){   paintList('slotRacas',   registry.get('races'),   it=>escapeHTML(it.name||it)); }
+    if (name==='backgrounds'){ paintList('slotAntecedentes', registry.get('backgrounds'), it=>escapeHTML(it.name||it)); }
+    if (name==='spells'){  paintList('slotSpells',  registry.get('spells'),  it=>escapeHTML(it.name||it)); }
+  });
+
+  // Pequena API para o wizard “ouvir” seleção quando os itens forem clicados
+  (function bridgeWizardSelectable(){
+    const map = {
+      slotClasses: { path:'class', reg:'classes' },
+      slotRacas:   { path:'race',  reg:'races' },
+      slotAntecedentes:{ path:'background', reg:'backgrounds' }
+    };
+    document.addEventListener('click', function(ev){
+      const t = ev.target;
+      if (!t.classList || !t.classList.contains('item')) return;
+      const parent = t.closest('.cols'); if (!parent || !parent.id) return;
+      const info = map[parent.id]; if (!info) return;
+      const idx = parseInt(t.getAttribute('data-val')||'-1',10);
+      const arr = registry.get(info.reg)||[];
+      const selected = arr[idx];
+      // Atualiza apenas o resumo do wizard, sem mexer no template anterior
+      try{
+        if (window.wiz && window.wiz.data){
+          if (info.path==='class') window.wiz.data['class'] = selected?.name||selected||null;
+          if (info.path==='race')  window.wiz.data.race     = selected?.name||selected||null;
+          if (info.path==='background') window.wiz.data.background = selected?.name||selected||null;
+          if (typeof window.updateSummary==='function') window.updateSummary();
+        }
+      }catch(e){}
+    }, {passive:true});
+  })();
+
+  /* ============================
+     5) GM: abrir último jogo ao iniciar (opcional)
+     - Hooka no Play (sem substituir seu listener)
+  ============================ */
+  (function restoreLastGameOnStart(){
+    const btn = document.getElementById('btnPlay');
+    if (!btn) return;
+    btn.addEventListener('click', function(){
+      const last = window.IELD.store.get('gm.lastGameId');
+      if (!last) return;
+      // Espera a parte 3 criar openDashboard; se existir, abre
+      setTimeout(function(){
+        if (typeof openDashboard==='function'){ try{ openDashboard(last); }catch{} }
+      }, 0);
+    });
+  })();
+
+  // Quando abrir dashboard, lembramos o id
+  bus.on('gm:opened', function(e){
+    const id = (e.detail&&e.detail.id)||null;
+    if (id) window.IELD.store.reduce('gm:setLastGame', {id});
+  });
+
+  /* ============================
+     6) Command Palette (Ctrl+K)
+     - tudo por eventos => alterar sem tocar UI antiga
+  ============================ */
+  (function commandPalette(){
+    if (document.getElementById('cmdPalette')) return;
+    const wrap = document.createElement('div');
+    wrap.id='cmdPalette';
+    wrap.style.cssText='position:fixed;inset:auto 0 0 0;display:none;background:#0f1115cc;backdrop-filter:blur(6px);padding:16px;border-top:1px solid #242a38;z-index:99999';
+    wrap.innerHTML = `
+      <div class="panel" style="max-width:840px;margin:0 auto">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <b>Comandos rápidos</b>
+          <button id="cmdClose">Fechar (Esc)</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <input id="cmdInput" type="text" placeholder="Ex.: abrir jogos, novo jogo, nova ficha, tema claro..." style="flex:1">
+          <button id="cmdRun" class="primary">OK</button>
+        </div>
+        <div id="cmdHints" class="muted" style="margin-top:6px">Dicas: "abrir jogos", "novo jogo", "novo personagem", "tela cheia", "tema claro/escuro"</div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+
+    let visible=false;
+    function show(){ wrap.style.display='block'; visible=true; setTimeout(()=>inp.focus(),0); }
+    function hide(){ wrap.style.display='none'; visible=false; }
+
+    const inp = wrap.querySelector('#cmdInput');
+    wrap.querySelector('#cmdClose').onclick = hide;
+    wrap.querySelector('#cmdRun').onclick = run;
+
+    function run(){
+      const q = (inp.value||'').toLowerCase().trim();
+      if (!q) { hide(); return; }
+      // roteador besta — e você pode sobrescrever via bus
+      if (q.includes('novo jogo')) document.getElementById('btnNovoJogoMestre')?.click();
+      else if (q.includes('abrir jogos')||q.includes('jogos')) document.getElementById('btnJogosMestre')?.click();
+      else if (q.includes('novo personagem')||q.includes('nova ficha')) document.getElementById('btnNovo')?.click();
+      else if (q.includes('tela cheia')) document.getElementById('fsEnter')?.click();
+      else if (q.includes('sair tela cheia')||q.includes('fechar tela cheia')) document.getElementById('fsExit')?.click();
+      else if (q.includes('tema claro')) window.IELD.store.reduce('ui:setTheme',{theme:'light'});
+      else if (q.includes('tema escuro')||q.includes('tema dark')) window.IELD.store.reduce('ui:setTheme',{theme:'dark'});
+      bus.emit('cmd:run', { text:q });
+      hide();
+    }
+
+    document.addEventListener('keydown', function(e){
+      if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); visible?hide():show(); }
+      if (e.key==='Escape' && visible) hide();
+      if (e.key==='Enter' && visible) run();
+    });
+
+    // Exemplo: outros módulos podem adicionar comandos ouvindo cmd:run
+    // bus.on('cmd:run', (e)=>{ /* e.detail.text */ });
+  })();
+
+  /* ============================
+     7) Perf & UX: micro‑otimizações
+     - batch de writes em localStorage
+     - throttling de re-render em abas
+     - observador de visibilidade (pausa autosave de história)
+  ============================ */
+  (function perfTweaks(){
+    // Batch writes: intercepta write(KEYS.characters, ...) se existir
+    try{
+      const _origWrite = window.write;
+      const queue = new Map(); // key -> lastValue
+      let raf = null;
+      window.write = function(key, val){
+        queue.set(key, val);
+        if (!raf){
+          raf = requestAnimationFrame(()=>{
+            raf=null;
+            queue.forEach((v,k)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} });
+            queue.clear();
+          });
+        }
+      };
+      window.__WRITE_WRAPPED__ = true;
+      // fallback: se não existia antes, ok — mantemos compat
+    }catch(e){}
+
+    // Throttle render da ficha
+    if (typeof window.renderSheet==='function'){
+      const _orig = window.renderSheet;
+      let scheduled=null, lastArg=null;
+      window.renderSheet = function(ch){
+        lastArg = ch;
+        if (scheduled) return;
+        scheduled = requestAnimationFrame(()=>{ scheduled=null; _orig(lastArg); });
+      };
+    }
+
+    // Pausar autosave de história quando a aba não está visível
+    document.addEventListener('visibilitychange', function(){
+      bus.emit('ui:visibility', { hidden: document.hidden });
+    });
+  })();
+
+  /* ============================
+     8) Theming/Density via Store
+     - Aplica classes no <body> reativas ao store
+  ============================ */
+  (function reactiveTheme(){
+    function apply(){
+      const ui = window.IELD.store.get('ui') || {};
+      document.documentElement.style.colorScheme = (ui.theme==='light'?'light':'dark');
+      document.body.dataset.theme = ui.theme||'dark';
+      document.body.dataset.density = ui.density||'comfortable';
+    }
+    apply();
+    bus.on('store:changed', function(e){
+      if (e.detail && (e.detail.type||e.detail.path)){
+        const k = e.detail.type || e.detail.path;
+        if (String(k).startsWith('ui:') || String(k).startsWith('ui.')) apply();
+      }
+    });
+    // CSS mínimos (não colide com os já existentes)
+    const style = document.createElement('style');
+    style.textContent = `
+      body[data-theme="light"]{ background:#f7f7fb; color:#0b1020 }
+      body[data-theme="light"] header{ background:#eef0f7; border-bottom-color:#d8dcef }
+      body[data-theme="light"] .panel{ background:#ffffff; border-color:#e1e6f3 }
+      body[data-density="compact"] .chip{ padding:4px 8px; border-radius:10px; }
+      body[data-density="compact"] button{ padding:7px 10px; }
+      body[data-density="compact"] textarea, body[data-density="compact"] input[type="text"]{ padding:8px; }
+    `;
+    document.head.appendChild(style);
+  })();
+
+  /* ============================
+     9) API pública para “mexer lá de cima com script novo”
+     - IELD.api.* dispara eventos/reduções sem reescrever nada
+  ============================ */
+  window.IELD.api = Object.freeze({
+    // UI
+    setTheme(theme){ window.IELD.store.reduce('ui:setTheme',{theme}); },
+    setDensity(density){ window.IELD.store.reduce('ui:setDensity',{density}); },
+    enterFullscreen(){ document.getElementById('fsEnter')?.click(); },
+    exitFullscreen(){ document.getElementById('fsExit')?.click(); },
+    // Navegação
+    openList(){ try{ window.openList?.(); }catch{} },
+    openCreate(){ try{ window.openCreate?.(); }catch{} },
+    openSheetById(id){ try{ window.openSheet?.(id); }catch{} },
+    openGMList(){ document.getElementById('btnJogosMestre')?.click(); },
+    openGMNew(){ document.getElementById('btnNovoJogoMestre')?.click(); },
+    // Registries
+    setRegistry: registry.set,
+    appendRegistry: registry.append,
+    getRegistry: registry.get,
+    // Store raw
+    getState: window.IELD.store.get,
+    patch: window.IELD.store.patch,
+    reduce: window.IELD.store.reduce,
+    // Bus
+    on: bus.on,
+    off: bus.off,
+    emit: bus.emit
+  });
+
+  /* ============================
+     10) Pequenos ganchos visuais para o GM
+     - Quando abrir dashboard, emitimos gm:opened
+     - Ao trocar de jogo/encounter, também emitimos
+     * Estes hooks assumem as funções criadas na Parte 3
+  ============================ */
+  (function gmHooks(){
+    // Monkey-patch openDashboard só para emitir evento (sem quebrar)
+    if (typeof window.openDashboard==='function' && !window.openDashboard.__patchedForBus){
+      const _od = window.openDashboard;
+      window.openDashboard = function(id){
+        const out = _od.apply(this, arguments);
+        bus.emit('gm:opened', { id });
+        return out;
+      };
+      window.openDashboard.__patchedForBus = true;
+    }
+  })();
+
+  /* ============================
+     11) Mini painel “Dev” opcional (Ctrl+D)
+     - Mostra estado, botões rápidos e injeta JSON em registries
+  ============================ */
+  (function devPanel(){
+    if (document.getElementById('devDock')) return;
+    const dock = document.createElement('div');
+    dock.id='devDock';
+    dock.style.cssText='position:fixed;right:12px;bottom:12px;z-index:99998';
+    dock.innerHTML = `
+      <button id="devToggle" class="chip">⚙️ Dev</button>
+      <div id="devBox" class="panel hidden" style="width:360px;margin-top:6px">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <b>Ferramentas</b>
+          <button id="devClose">×</button>
+        </div>
+        <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+          <button data-act="themeDark">Tema escuro</button>
+          <button data-act="themeLight">Tema claro</button>
+          <button data-act="densityCompact">Densidade compacta</button>
+          <button data-act="densityComfort">Densidade confortável</button>
+          <button data-act="gmList">Abrir GM</button>
+          <button data-act="fs">Tela cheia</button>
+        </div>
+        <textarea id="devJson" class="muted" placeholder='Cole JSON p/ registry (ex.: {"classes":[{"name":"Guerreiro"}]})' style="margin-top:8px"></textarea>
+        <div class="row" style="justify-content:flex-end;margin-top:6px">
+          <button id="devApply" class="primary">Aplicar JSON</button>
+        </div>
+        <pre id="devState" style="max-height:160px;overflow:auto;margin-top:8px"></pre>
+      </div>
+    `;
+    document.body.appendChild(dock);
+    const box = dock.querySelector('#devBox');
+    const stateEl = box.querySelector('#devState');
+    function refresh(){ stateEl.textContent = JSON.stringify(window.IELD.store.get(), null, 2); }
+    dock.querySelector('#devToggle').onclick = ()=>{ box.classList.toggle('hidden'); refresh(); };
+    dock.querySelector('#devClose').onclick  = ()=>{ box.classList.add('hidden'); };
+    dock.querySelector('#devApply').onclick  = ()=>{
+      try{
+        const obj = JSON.parse(box.querySelector('#devJson').value||'{}');
+        Object.keys(obj).forEach(k=>{
+          if (k==='registries'){
+            const r = obj[k]||{};
+            Object.keys(r).forEach(n=> window.IELD.registry.set(n, r[n]));
+          } else {
+            window.IELD.store.patch(k, obj[k]);
+          }
+        });
+        refresh();
+      }catch(e){ alert('JSON inválido'); }
+    };
+    box.addEventListener('click', function(ev){
+      const act = ev.target.getAttribute('data-act'); if(!act) return;
+      if (act==='themeDark') window.IELD.api.setTheme('dark');
+      if (act==='themeLight') window.IELD.api.setTheme('light');
+      if (act==='densityCompact') window.IELD.api.setDensity('compact');
+      if (act==='densityComfort') window.IELD.api.setDensity('comfortable');
+      if (act==='gmList') window.IELD.api.openGMList();
+      if (act==='fs') window.IELD.api.enterFullscreen();
+      refresh();
+    });
+
+    // Ctrl+D abre/fecha
+    document.addEventListener('keydown', (e)=>{
+      if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='d'){
+        e.preventDefault(); dock.querySelector('#devToggle').click();
+      }
+    });
+
+    // Atualiza quando store mudar
+    bus.on('store:changed', refresh);
+  })();
+
+  /* ============================
+     12) Exemplo: como você vai alimentar depois
+     - NÃO colocamos dados agora; só ilustração pra você usar depois:
+     // IELD.api.setRegistry('classes', [{name:'Guerreiro'},{name:'Mago'}]);
+     // IELD.api.setRegistry('races',   [{name:'Humano'},{name:'Elfo'}]);
+     - O wizard e o GM já reagem quando isso acontecer.
+  ============================ */
+
+})();
+</script>
+
+<!-- ========================= CONTINUAÇÃO — BLOCO 3/4 (≈300 linhas) =========================
+     Fecha e completa o “núcleo late-bound” + utilitários de integração.
+     Não adiciona dados de D&D (classes/raças/antecedentes).
+     Tudo é “append-only”: cole no FINAL do arquivo.
+============================================================================================== -->
+<script>
+(function(){
+  // Se o bloco anterior ficou truncado, garantimos que esta IIFE fecha corretamente.
+  // Reusa/estende a mesma janela global.
+  window.IELD = window.IELD || {};
+  const IELD = window.IELD;
+
+  // ------------------------- 1) Interop com navegação/views -------------------------
+  // Fallbacks seguros caso algum módulo não tenha carregado (por ex. FS).
+  if (typeof window.fsShowCurrent !== 'function') window.fsShowCurrent = function(){};
+  if (typeof window.switchTab !== 'function') window.switchTab = function(){};
+
+  // Encapamos showView original para acionar fsShowCurrent após cada troca.
+  (function patchShowView(){
+    if (window.__SHOW_VIEW_PATCHED__) return;
+    const original = window.showView;
+    if (typeof original === 'function'){
+      window.showView = function(name){
+        try{ original(name); }finally{ try{ window.fsShowCurrent(); }catch(e){} }
+      };
+      window.__SHOW_VIEW_PATCHED__ = true;
+    }
+  })();
+
+  // API de navegação do IELD (opera por ids já existentes)
+  IELD.goto = function(view){
+    // view: 'list' | 'create' | 'sheet' | (id de section arbitrário)
+    var map = { list:'viewList', create:'viewCreate', sheet:'viewSheet' };
+    var id = map[view] || view;
+    var el = document.getElementById(id);
+    if (!el){
+      console.warn('[IELD.goto] view não encontrada:', view);
+      return;
+    }
+    // esconde todas sections .panel irmãos de <main>
+    var main = document.querySelector('main') || document.body;
+    var secs = main.querySelectorAll('section.panel');
+    for (var i=0;i<secs.length;i++) secs[i].classList.add('hidden');
+    el.classList.remove('hidden');
+    try{ window.fsShowCurrent(); }catch(e){}
+    IELD.mutate && IELD.mutate('ui.currentView', id);
+  };
+
+  // ------------------------- 2) Compat/shims do Wizard & Ficha -------------------------
+  // resetWizard é chamado pelo App base no openCreate(); aqui roteamos para o Wizard novo.
+  if (typeof window.resetWizard !== 'function'){
+    window.resetWizard = function(){ try{ window.App?.Wizard?.api?.reset?.(); }catch(e){} };
+  }
+
+  // getCurrent: retorna a ficha aberta (usa currentId do app base).
+  if (typeof window.getCurrent !== 'function'){
+    window.getCurrent = function(){
+      try{
+        var list = Array.isArray(window.characters) ? window.characters : (window.App?.state?.characters || []);
+        var id = window.currentId;
+        if (!id) return null;
+        for (var i=0;i<list.length;i++){ if (list[i] && list[i].id === id) return list[i]; }
+      }catch(e){}
+      return null;
+    };
+  }
+
+  // Sincroniza cache global `characters` com App.state.characters (quando existir)
+  (function syncCharactersMirror(){
+    var App = window.App || {};
+    var defineMirror = function(arr){
+      try{ window.characters = Array.isArray(arr) ? arr : []; }catch(e){}
+    };
+    // valor inicial
+    try{ defineMirror(App.state ? App.state.characters : window.characters); }catch(e){}
+    // ouve mudanças se BUS existir
+    if (App.BUS && !window.__CHAR_SYNC_BOUND__){
+      window.__CHAR_SYNC_BOUND__ = true;
+      App.BUS.on('characters:changed', defineMirror);
+    }
+  })();
+
+  // ------------------------- 3) Renderização da Ficha (mínima e extensível) -------------------------
+  // Gera um texto/“prompt” descritivo sem embutir dados oficiais (D&D).
+  if (typeof window.__buildDescription !== 'function'){
+    window.__buildDescription = function(ch){
+      if (!ch) return '(sem dados)';
+      var lines = [];
+      lines.push((ch.name||'Sem Nome') + (ch.level ? ' — nível ' + ch.level : ''));
+      if (ch.race || ch.class || ch.background){
+        var tags = [];
+        if (ch.race) tags.push('Raça: '+ch.race);
+        if (ch.class) tags.push('Classe: '+ch.class);
+        if (ch.background) tags.push('Antecedente: '+ch.background);
+        lines.push(tags.join(' · '));
+      }
+      if (ch.abilities){
+        var ab = ch.abilities;
+        lines.push('Atributos: FOR '+ab.str+'; DES '+ab.dex+'; CON '+ab.con+'; INT '+ab.int+'; SAB '+ab.wis+'; CAR '+ab.cha);
+      }
+      if (ch.personality){
+        var P = ch.personality;
+        var blocos = [];
+        if (P.traits)  blocos.push('Traços: '+P.traits);
+        if (P.ideals)  blocos.push('Ideais: '+P.ideals);
+        if (P.bonds)   blocos.push('Vínculos: '+P.bonds);
+        if (P.flaws)   blocos.push('Defeitos: '+P.flaws);
+        if (blocos.length) lines.push(blocos.join(' | '));
+      }
+      if (ch.appearance){
+        var A = ch.appearance, tip = [];
+        if (A.height) tip.push('Altura '+A.height);
+        if (A.weight) tip.push('Peso '+A.weight);
+        if (A.eyes)   tip.push('Olhos '+A.eyes);
+        if (A.skin)   tip.push('Pele '+A.skin);
+        if (A.hair)   tip.push('Cabelo '+A.hair);
+        if (tip.length) lines.push(tip.join(' · '));
+      }
+      if (ch.journal && ch.journal.history){
+        lines.push('História: '+ch.journal.history);
+      }
+      return lines.join('\n');
+    };
+  }
+
+  // Render básico da “aba Ficha”: resumo limpo que não depende de dados oficiais.
+  if (typeof window.renderSheet !== 'function'){
+    window.renderSheet = function(ch){
+      ch = ch || window.getCurrent?.() || null;
+      var tgt = document.getElementById('sheetSummary');
+      if (!tgt) return;
+      if (!ch){ tgt.textContent = '(sem ficha)'; return; }
+
+      var ab = ch.abilities || {str:8,dex:8,con:8,int:8,wis:8,cha:8};
+      var linhas = [
+        '<div class="row" style="gap:8px;flex-wrap:wrap">',
+        '  <span class="chip"><b>Nome:</b> '+IELD.esc(ch.name||'Sem Nome')+'</span>',
+        '  <span class="chip"><b>Nível:</b> '+(ch.level||1)+'</span>',
+        '  <span class="chip"><b>Raça:</b> '+IELD.esc(ch.race||'—')+'</span>',
+        '  <span class="chip"><b>Classe:</b> '+IELD.esc(ch.class||'—')+'</span>',
+        '  <span class="chip"><b>Antecedente:</b> '+IELD.esc(ch.background||'—')+'</span>',
+        (ch.alignment ? '  <span class="chip"><b>Tendência:</b> '+IELD.esc(ch.alignment)+'</span>' : ''),
+        '</div>',
+        '<div class="panel" style="margin-top:8px">',
+        '  <div class="row" style="gap:8px;flex-wrap:wrap">',
+        '    <span class="chip">FOR '+ab.str+'</span>',
+        '    <span class="chip">DES '+ab.dex+'</span>',
+        '    <span class="chip">CON '+ab.con+'</span>',
+        '    <span class="chip">INT '+ab.int+'</span>',
+        '    <span class="chip">SAB '+ab.wis+'</span>',
+        '    <span class="chip">CAR '+ab.cha+'</span>',
+        '  </div>',
+        '</div>',
+        '<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">',
+        '  <button id="btnGoJournal">Editar História/Retrato</button>',
+        '  <button id="btnCopyDescFromSheet">Copiar Descrição</button>',
+        '</div>'
+      ].filter(Boolean);
+      tgt.innerHTML = linhas.join('\n');
+
+      // Prepara retrato na aba Jornal
+      var prev  = document.getElementById('portraitPreviewSheet');
+      var ph    = document.getElementById('portraitPlaceholderSheet');
+      if (prev && ph){
+        if (ch.portrait && ch.portrait.dataUrl){
+          prev.src = ch.portrait.dataUrl;
+          prev.classList.remove('hidden');
+          ph.classList.add('hidden');
+        } else {
+          prev.classList.add('hidden');
+          ph.classList.remove('hidden');
+        }
+      }
+      // Preenche história atual
+      var ta = document.getElementById('journalHistory');
+      if (ta){ ta.value = (ch.journal && ch.journal.history) ? ch.journal.history : ''; }
+    };
+  }
+
+  // Botões da aba Jornal (Salvar/Copy) — idempotentes
+  (function bindJournalButtons(){
+    var bSave = document.getElementById('btnSaveHistory');
+    if (bSave && !bSave.__bound){
+      bSave.__bound = true;
+      bSave.addEventListener('click', function(){
+        var ch = window.getCurrent?.(); if (!ch) return;
+        var ta = document.getElementById('journalHistory');
+        var status = document.getElementById('historyStatus');
+        if (status) status.textContent = 'Salvando…';
+        ch.journal = ch.journal || {};
+        ch.journal.history = (ta && ta.value)||'';
+        ch.updatedAt = Date.now();
+        // persiste
+        try{
+          var arr = (window.App?.state?.characters) ? window.App.state.characters : (window.characters||[]);
+          var out = Array.isArray(arr) ? arr.map(c=> c && c.id===ch.id ? ch : c) : [];
+          if (window.App?.state) window.App.state.characters = out; else window.characters = out;
+        }catch(e){}
+        if (status){ status.textContent = 'Salvo.'; setTimeout(()=>{ status.textContent=''; }, 900); }
+      });
+    }
+
+    var bCopy = document.getElementById('btnCopyDesc');
+    if (bCopy && !bCopy.__bound){
+      bCopy.__bound = true;
+      bCopy.addEventListener('click', function(){
+        var ch = window.getCurrent?.();
+        var txt = window.__buildDescription ? window.__buildDescription(ch) : '';
+        var out = document.getElementById('wizDescOut');
+        if (out) out.value = txt;
+        if (navigator.clipboard && txt){
+          navigator.clipboard.writeText(txt).catch(function(){});
+        }
+      });
+    }
+  })();
+
+  // Atualiza a ficha ao abrir/alterar personagem
+  (function autoRenderOnOpen(){
+    // patcha openSheet para garantir render ao final
+    if (!window.__OPEN_SHEET_PATCHED__ && typeof window.openSheet === 'function'){
+      window.__OPEN_SHEET_PATCHED__ = true;
+      var _open = window.openSheet;
+      window.openSheet = function(id){
+        try{ _open(id); }finally{
+          try{
+            var ch = window.getCurrent?.();
+            window.renderSheet?.(ch);
+          }catch(e){}
+        }
+      };
+    }
+  })();
+
+  // ------------------------- 4) Utilitário: redimensionar retrato (DataURL) -------------------------
+  // Usado no Wizard e na Ficha (substituição).
+  if (typeof window.processPortraitFile !== 'function'){
+    window.processPortraitFile = function(file, cb, maxSize){
+      maxSize = maxSize || 512;
+      try{
+        var reader = new FileReader();
+        reader.onload = function(){
+          var img = new Image();
+          img.onload = function(){
+            try{
+              var w = img.width, h = img.height;
+              var scale = 1;
+              if (w > h && w > maxSize) scale = maxSize / w;
+              else if (h >= w && h > maxSize) scale = maxSize / h;
+              var nw = Math.max(1, Math.round(w * scale));
+              var nh = Math.max(1, Math.round(h * scale));
+              var canvas = document.createElement('canvas');
+              canvas.width = nw; canvas.height = nh;
+              var ctx = canvas.getContext('2d');
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, 0, 0, nw, nh);
+              var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+              if (typeof cb === 'function') cb(dataUrl);
+            }catch(e){ console.error('processPortraitFile:draw', e); if (typeof cb==='function') cb(reader.result); }
+          };
+          img.onerror = function(){ if (typeof cb==='function') cb(reader.result); };
+          img.src = reader.result;
+        };
+        reader.onerror = function(){ if (typeof cb==='function') cb(null); };
+        reader.readAsDataURL(file);
+      }catch(e){
+        console.error('processPortraitFile', e);
+        if (typeof cb==='function') cb(null);
+      }
+    };
+  }
+
+  // ------------------------- 5) Pequenas extensões úteis (append-only) -------------------------
+  // Exibição rápida do total de fichas no header (opcional, discreto)
+  ;(function tinyCounter(){
+    if (window.__TINY_COUNTER__) return; window.__TINY_COUNTER__ = true;
+    try{
+      var nav = document.querySelector('header .nav');
+      if (!nav) return;
+      if (!document.getElementById('chipTotalChars')){
+        var span = document.createElement('span');
+        span.id = 'chipTotalChars';
+        span.className = 'chip';
+        span.style.marginLeft = '4px';
+        span.textContent = 'Fichas: 0';
+        nav.appendChild(span);
+      }
+      var paint = function(){
+        var n = Array.isArray(window.characters) ? window.characters.length : 0;
+        var el = document.getElementById('chipTotalChars');
+        if (el) el.textContent = 'Fichas: '+n;
+      };
+      paint();
+      // reage a alterações do App
+      if (window.App?.BUS) window.App.BUS.on('characters:changed', paint);
+      // e ao iniciar o app (Play)
+      var btnPlay = document.getElementById('btnPlay');
+      if (btnPlay && !btnPlay.__tinyCount){
+        btnPlay.__tinyCount = true;
+        btnPlay.addEventListener('click', paint);
+      }
+    }catch(e){}
+  })();
+
+  // API extra para scripts do rodapé mexerem “por baixo”
+  IELD.api = IELD.api || {};
+  IELD.api.current = function(){ return window.getCurrent?.() || null; };
+  IELD.api.saveCharacter = function(ch){
+    if (!ch || !ch.id) return false;
+    try{
+      var arr = window.App?.state?.characters || window.characters || [];
+      var next = Array.isArray(arr) ? arr.map(x=> x && x.id===ch.id ? ch : x) : [];
+      if (window.App?.state) window.App.state.characters = next; else window.characters = next;
+      return true;
+    }catch(e){ return false; }
+  };
+  IELD.api.setPortrait = function(dataUrl){
+    var ch = IELD.api.current(); if (!ch) return false;
+    ch.portrait = { dataUrl:dataUrl }; return IELD.api.saveCharacter(ch);
+  };
+  IELD.api.setHistory = function(text){
+    var ch = IELD.api.current(); if (!ch) return false;
+    ch.journal = ch.journal || {}; ch.journal.history = String(text||'');
+    return IELD.api.saveCharacter(ch);
+  };
+
+  // ------------------------- 6) Inicio “suave” após colagem -------------------------
+  // Se a view atual for a ficha, re-renderiza para capturar novos helpers.
+  try{
+    var v = document.getElementById('viewSheet');
+    if (v && !v.classList.contains('hidden')){
+      window.renderSheet?.(window.getCurrent?.());
+    }
+  }catch(e){}
+})();
+</script>
+
+
+<script>
+/* Hotfix: navegação do Wizard por delegação (append-only) */
+(function(){
+  if (window.__WIZ_NAV_FALLBACK__) return;
+  window.__WIZ_NAV_FALLBACK__ = true;
+
+  function refreshUI(){
+    try{
+      var W = (window.App && App.Wizard) ? App.Wizard : null;
+      if (!W || !W.STEPS || !W.STEPS.length) return;
+      var cur = W.STEPS[W.state.step];
+
+      // esconde todos os passos e mostra o atual
+      W.STEPS.forEach(function(s){
+        var el = document.getElementById(s.id);
+        if (el) el.classList.add('hidden');
+      });
+      var sec = document.getElementById(cur.id);
+      if (sec) sec.classList.remove('hidden');
+
+      // header/progresso/botões
+      var t = document.getElementById('wizStepTitle');
+      if (t) t.textContent = 'Passo ' + (W.state.step+1) + '/' + W.STEPS.length + ' — ' + cur.label;
+      var p = document.getElementById('wizProgress');
+      if (p) p.textContent = Math.round((W.state.step)/(W.STEPS.length-1)*100) + '% concluído';
+      var b = document.getElementById('wizBack'); if (b) b.disabled = (W.state.step===0);
+      var n = document.getElementById('wizNext'); if (n) n.textContent = (W.state.step===W.STEPS.length-1)?'Concluir ✔':'Avançar →';
+    }catch(e){}
+  }
+
+  function concluir(){
+    try{
+      var W = (window.App && App.Wizard) ? App.Wizard : null;
+      if (!W) return;
+      var now = Date.now();
+      var id  = 'ch_' + now.toString(36);
+      var d   = W.state.data || {};
+
+      var ch = {
+        id, name:(d.name||'Sem Nome'), level:(d.level||1),
+        createdAt:now, updatedAt:now,
+        race:d.race, 'class':d.class, background:d.background, alignment:d.alignment,
+        abilities:Object.assign({}, d.abilities||{}),
+        profs:{ skills:[].concat(d.profs&&d.profs.skills||[]),
+                languages:[].concat(d.profs&&d.profs.languages||[]),
+                tools:[].concat(d.profs&&d.profs.tools||[]) },
+        feats:[].concat(d.feats||[]),
+        equip:{ mode: d.equip && d.equip.mode || null },
+        appearance:Object.assign({}, d.appearance||{}),
+        personality:Object.assign({}, d.personality||{}),
+        inventory:[],
+        spells:{ known:[].concat(d.spells&&d.spells.known||[]), prepared:[], slots:{} },
+        journal:{ history:(d.story||''), quests:[], contacts:[], locations:[] },
+        portrait: d.portraitData ? { dataUrl:d.portraitData } : null,
+        settings:{ encumbrance:true, units:'lb' }
+      };
+      if (typeof window.__buildDescription==='function') ch.description = window.__buildDescription(ch);
+
+      var arr = (App && App.state) ? App.state.characters : (window.characters||[]);
+      arr.push(ch);
+      if (App && App.state) App.state.characters = arr; else window.characters = arr;
+
+      if (typeof window.openSheet==='function') window.openSheet(id);
+
+      // reset básico
+      W.state.step = 0;
+      W.state.data = { class:null, race:null, alignment:null, background:null, name:'', level:1,
+        abilities:{str:8,dex:8,con:8,int:8,wis:8,cha:8},
+        profs:{skills:[],languages:[],tools:[]}, feats:[],
+        equip:{mode:null},
+        appearance:{ height:'', weight:'', eyes:'', skin:'', hair:'' },
+        personality:{ traits:'', ideals:'', bonds:'', flaws:'' },
+        spells:{ known:[] }, story:'', portraitData:null
+      };
+      refreshUI();
+    }catch(e){}
+  }
+
+  // Delegação global: funciona mesmo se o bind original falhar
+  document.addEventListener('click', function(ev){
+    var t = ev.target && ev.target.id;
+    if (!t) return;
+    var W = (window.App && App.Wizard) ? App.Wizard : null;
+    if (!W) return;
+
+    if (t==='wizNext'){
+      if (W.state.step < W.STEPS.length-1){ W.state.step++; refreshUI(); }
+      else { concluir(); }
+    }
+    if (t==='wizBack'){
+      if (W.state.step>0){ W.state.step--; refreshUI(); }
+    }
+    if (t==='wizCancel'){
+      if (typeof window.openList==='function') window.openList();
+      W.state.step = 0; refreshUI();
+    }
+  }, true);
+
+  // expõe resetWizard para o openCreate() do app base
+  if (!window.resetWizard){
+    window.resetWizard = function(){
+      var W = (window.App && App.Wizard) ? App.Wizard : null;
+      if (!W) return;
+      W.state.step = 0;
+      W.state.data = { class:null, race:null, alignment:null, background:null, name:'', level:1,
+        abilities:{str:8,dex:8,con:8,int:8,wis:8,cha:8},
+        profs:{skills:[],languages:[],tools:[]}, feats:[],
+        equip:{mode:null},
+        appearance:{ height:'', weight:'', eyes:'', skin:'', hair:'' },
+        personality:{ traits:'', ideals:'', bonds:'', flaws:'' },
+        spells:{ known:[] }, story:'', portraitData:null
+      };
+      refreshUI();
+    };
+  }
+
+  // pinta o passo atual se já estiver na tela
+  refreshUI();
+})();
+</script>
+
+
+
+<!-- ==== PATCH: Router unificado + anti-tooltip mobile + desativa GM core ==== -->
+<style>
+  /* Garante que "hidden" sempre esconda e evita tooltip/callout no mobile */
+  .hidden{ display:none !important }
+  button, .tabbtn, .item{ -webkit-touch-callout:none; user-select:none; touch-action:manipulation; -webkit-tap-highlight-color:transparent }
+  /* Se os views antigos do GM (core) existirem, some com eles para não duplicar */
+  #gmViewList, #gmViewEditor { display:none !important; }
+</style>
+<script>
+(function(){
+  if (window.__ROUTER_UNIFICADO__) return;
+  window.__ROUTER_UNIFICADO__ = true;
+
+  var main = document.querySelector('main') || document.body;
+
+  // Esconde todos os <section.panel> de 1º nível dentro de <main>
+  function hideAll(){
+    var secs = main.querySelectorAll(':scope > section.panel');
+    for (var i=0;i<secs.length;i++){ secs[i].classList.add('hidden'); }
+  }
+
+  // Mostra uma view por id e sobe a página
+  function showOnly(id){
+    hideAll();
+    var el = document.getElementById(id);
+    if (el){ el.classList.remove('hidden'); }
+    // sobe pro topo para não parecer que "ficou embaixo"
+    try{ window.scrollTo({ top:0, behavior:'instant' }); }catch(e){ window.scrollTo(0,0); }
+  }
+
+  // Intercepta as trocas de view do app base (lista/criar/ficha)
+  ['openList','openCreate','openSheet'].forEach(function(fn){
+    if (typeof window[fn] === 'function' && !window[fn].__r_wrap){
+      var orig = window[fn];
+      window[fn] = function(){
+        hideAll();
+        var r = orig.apply(this, arguments);
+        try{ window.scrollTo({ top:0, behavior:'instant' }); }catch(e){ window.scrollTo(0,0); }
+        return r;
+      };
+      window[fn].__r_wrap = true;
+    }
+  });
+
+  // Liga os botões do header a um único fluxo (funciona com GM v2 ou core)
+  function bindHeader(btnId, openFnNames){
+    var b = document.getElementById(btnId);
+    if (!b || b.__r_hdr) return;
+    b.__r_hdr = true;
+    b.addEventListener('click', function(ev){
+      ev.preventDefault();
+      // tenta cada função possível, a que existir abre a view
+      for (var i=0;i<openFnNames.length;i++){
+        var f = window[openFnNames[i]];
+        if (typeof f === 'function'){ f(null); break; }
+      }
+      // garante que apenas UMA section fique visível
+      setTimeout(function(){
+        var vis = Array.from(main.querySelectorAll(':scope > section.panel'))
+          .filter(function(s){ return !s.classList.contains('hidden'); });
+        if (vis.length > 1){
+          // deixa apenas a última (a que o módulo acabou de mostrar)
+          for (var k=0;k<vis.length-1;k++){ vis[k].classList.add('hidden'); }
+        }
+        try{ window.scrollTo({ top:0, behavior:'instant' }); }catch(e){ window.scrollTo(0,0); }
+      }, 0);
+    });
+  }
+  bindHeader('btnJogosMestre',      ['openListView','openGMList']);      // Lista de jogos
+  bindHeader('btnNovoJogoMestre',   ['openEditor','openGMEditor']);      // Novo jogo
+
+  // Exponho um helper global caso você queira forçar a exibição de uma view por id
+  window.IELD_showOnly = showOnly;
+
+  // Se ao carregar já houver mais de uma section visível, mantém só a primeira
+  setTimeout(function(){
+    var vis = Array.from(main.querySelectorAll(':scope > section.panel'))
+      .filter(function(s){ return !s.classList.contains('hidden'); });
+    for (var i=1;i<vis.length;i++){ vis[i].classList.add('hidden'); }
+  }, 0);
+
+  // Remove títulos/“tooltips” nativos, se houverem
+  document.querySelectorAll('button[title]').forEach(function(b){ b.removeAttribute('title'); });
+})();
+</script>
+
+<script>
+(function(){
+  if (window.__HOME_BTN_INSTALLED__) return;
+  window.__HOME_BTN_INSTALLED__ = true;
+
+  function goHome(){
+    // Esconde todas as sections de 1º nível dentro de <main>
+    var main = document.querySelector('main') || document.body;
+    var secs = main.querySelectorAll(':scope > section.panel');
+    for (var i=0;i<secs.length;i++) secs[i].classList.add('hidden');
+
+    // Usa a navegação nativa se existir
+    if (typeof window.openList === 'function') window.openList();
+    else {
+      // fallback: mostra a view de lista
+      var list = document.getElementById('viewList');
+      if (list) list.classList.remove('hidden');
+    }
+
+    // sobe para o topo
+    try{ window.scrollTo({ top:0, behavior:'instant' }); }catch(e){ window.scrollTo(0,0); }
+  }
+
+  // 1) Botão no header
+  (function ensureHeaderHome(){
+    var nav = document.querySelector('header .nav');
+    if (!nav || document.getElementById('btnHome')) return;
+    var b = document.createElement('button');
+    b.id = 'btnHome';
+    b.textContent = '🏠 Início';
+    b.disabled = true; // habilita após Play
+    nav.insertBefore(b, nav.firstChild);
+
+    // habilita depois do Play
+    var play = document.getElementById('btnPlay');
+    function unlock(){ b.disabled = false; }
+    if (window.started) unlock();
+    if (play && !play.__homeUnlock){
+      play.__homeUnlock = true;
+      play.addEventListener('click', unlock);
+    }
+
+    if (!b.__bound){
+      b.__bound = true;
+      b.addEventListener('click', function(ev){ ev.preventDefault(); goHome(); });
+    }
+  })();
+
+  // 2) Atalho dentro das telas do Mestre (se existirem),
+  //    injeta um mini botão "Início" nos cabeçalhos.
+  function injectMiniHome(containerId){
+    var c = document.getElementById(containerId);
+    if (!c || c.__homeInjected) return;
+    c.__homeInjected = true;
+
+    // procura a primeira barra de título dentro do container
+    var bar = c.querySelector('.row');
+    if (!bar) return;
+
+    var btn = document.createElement('button');
+    btn.textContent = '🏠 Início';
+    btn.style.marginLeft = '8px';
+    btn.addEventListener('click', function(ev){ ev.preventDefault(); goHome(); });
+
+    // coloca no lado direito se houver
+    var rightGrp = bar.querySelector('.row') || bar;
+    rightGrp.appendChild(btn);
+  }
+
+  // observar e injetar quando essas views aparecerem
+  var obs = new MutationObserver(function(){
+    ['gmViewList','gmViewEditor'].forEach(injectMiniHome);      // GM core
+    Array.from(document.querySelectorAll('section[id^="gmV2Dash_"], #gmV2List, #gmV2Edit'))
+      .forEach(function(el){ injectMiniHome(el.id); });          // GM v2
+  });
+  obs.observe(document.body, { childList:true, subtree:true });
+
+  // 3) Expor um helper global caso você queira chamar por script
+  window.IELD_goHome = goHome;
+})();
+</script>
+<!-- ==== /PATCH ==== -->
+
+
+
+
+
+
+
+
+</body>
+</html>
+
+
